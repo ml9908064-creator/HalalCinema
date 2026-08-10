@@ -3,7 +3,8 @@ from flask import Flask, render_template_string, request, redirect, session
 app = Flask(__name__)
 app.secret_key = 'halal_cinema_super_secret_key'
 
-ADMIN_PASSWORD = "admin"
+# --- كلمة سر الأدمن الجديدة ---
+ADMIN_PASSWORD = "Halal@2026"
 
 # قاعدة البيانات المجهزة للحلقات
 MOVIES = [
@@ -194,9 +195,11 @@ ADMIN_TEMPLATE = """
         .row { display: flex; gap: 10px; }
         button { padding: 10px; background: #10b981; border: none; font-weight: 800; border-radius: 6px; cursor: pointer; color: #000; margin-top: 5px; }
         .btn-danger { background: #ef4444; color: #fff; }
+        .btn-warning { background: #f59e0b; color: #000; }
         .btn-add-ep { background: #3b82f6; color: #fff; width: 100%; }
         .work-box { background: #1a1d28; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-right: 4px solid #10b981; }
         .ep-item { background: #12141c; padding: 8px 12px; border-radius: 6px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
+        .edit-form { background: #111827; padding: 12px; border-radius: 8px; margin-top: 10px; display: none; border: 1px dashed #f59e0b; }
         .back-link { display: block; text-align: center; margin-top: 15px; color: #9ca3af; text-decoration: none; }
     </style>
 </head>
@@ -207,7 +210,7 @@ ADMIN_TEMPLATE = """
 
         {% if not logged_in %}
         <form method="POST" action="/admin/login">
-            <input type="password" name="password" placeholder="أدخل كلمة المرور" required>
+            <input type="password" name="password" placeholder="أدخل كلمة المرور الجديدة" required>
             <button type="submit" style="width:100%;">دخول</button>
         </form>
         {% else %}
@@ -232,33 +235,50 @@ ADMIN_TEMPLATE = """
         <hr style="border-color: #2d3446; margin: 30px 0;">
 
         <!-- التحكم بالمواسم والحلقات -->
-        <h3>إدارة السلسلة وإضافة الحلقات إليها بحرية</h3>
+        <h3>إدارة السلسلة والتعديل عليها</h3>
         {% for movie in movies %}
         <div class="work-box">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h4>{{ movie.title }} <span style="font-size:0.8rem; color:#10b981;">({{ movie.type }})</span></h4>
-                <form method="POST" action="/admin/delete/{{ movie.id }}">
-                    <button type="submit" class="btn-danger" onclick="return confirm('حذف العمل بالكامل؟')">حذف المسلسل</button>
+                <div style="display:flex; gap:6px;">
+                    <button type="button" class="btn-warning" onclick="toggleEdit('edit-{{ movie.id }}')">تعديل البيانات</button>
+                    <form method="POST" action="/admin/delete/{{ movie.id }}" style="margin:0;">
+                        <button type="submit" class="btn-danger" onclick="return confirm('حذف العمل بالكامل؟')">حذف المسلسل</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- نموذج تعديل معلومات السلسلة -->
+            <div id="edit-{{ movie.id }}" class="edit-form">
+                <strong style="color:#f59e0b; font-size:0.85rem;">تعديل بيانات السلسلة:</strong>
+                <form method="POST" action="/admin/edit/{{ movie.id }}" style="margin-top:8px;">
+                    <input type="text" name="title" value="{{ movie.title }}" required placeholder="العنوان">
+                    <div class="row">
+                        <input type="text" name="year" value="{{ movie.year }}" placeholder="السنة">
+                        <input type="text" name="poster" value="{{ movie.poster }}" required placeholder="رابط البوستر">
+                    </div>
+                    <textarea name="description" rows="2" placeholder="الوصف">{{ movie.description }}</textarea>
+                    <button type="submit" style="background:#f59e0b; color:#000; width:100%;">حفظ التعديلات</button>
                 </form>
             </div>
 
             <!-- قائمة الحلقات الحالية -->
-            <div style="margin-top: 10px;">
+            <div style="margin-top: 15px;">
                 <strong style="font-size: 0.85rem; color: #9ca3af;">الحلقات المضافة حالياً:</strong>
                 {% for ep in movie.episodes %}
                 <div class="ep-item">
                     <span>الحلقة {{ ep.ep_number }} — <small style="color: #6b7280;">{{ ep.embed_url[:35] }}...</small></span>
                     <form method="POST" action="/admin/delete_ep/{{ movie.id }}/{{ ep.ep_number }}" style="margin:0;">
-                        <button type="submit" style="background:#ef4444; color:#fff; padding:3px 8px; font-size:0.75rem;">حذف هذه الحلقة</button>
+                        <button type="submit" style="background:#ef4444; color:#fff; padding:3px 8px; font-size:0.75rem;">حذف الحلقة</button>
                     </form>
                 </div>
                 {% endfor %}
             </div>
 
-            <!-- نموذج إضافة حلقة جديدة للمسلسل -->
+            <!-- إضافة حلقة جديدة -->
             {% if movie.type == 'مسلسل' %}
             <div style="margin-top: 15px; background: #12141c; padding: 10px; border-radius: 6px;">
-                <strong style="color: #10b981; font-size: 0.85rem;">+ إضافة حلقة جديدة لهذه السلسلة:</strong>
+                <strong style="color: #10b981; font-size: 0.85rem;">+ إضافة حلقة جديدة للسلسلة:</strong>
                 <form method="POST" action="/admin/add_episode/{{ movie.id }}" style="margin-top: 8px;">
                     <div class="row">
                         <input type="number" name="ep_number" placeholder="رقم الحلقة (مثال: 2)" required style="width: 30%;">
@@ -276,6 +296,17 @@ ADMIN_TEMPLATE = """
         {% endif %}
         <a href="/" class="back-link">العودة للواجهة الرئيسية</a>
     </div>
+
+    <script>
+        function toggleEdit(id) {
+            const form = document.getElementById(id);
+            if (form.style.display === 'block') {
+                form.style.display = 'none';
+            } else {
+                form.style.display = 'block';
+            }
+        }
+    </script>
 
 </body>
 </html>
@@ -315,6 +346,18 @@ def admin_add():
         MOVIES.insert(0, new_item)
     return redirect('/admin')
 
+@app.route('/admin/edit/<movie_id>', methods=['POST'])
+def edit_movie(movie_id):
+    if session.get('logged_in'):
+        for movie in MOVIES:
+            if movie['id'] == movie_id:
+                movie['title'] = request.form.get('title')
+                movie['year'] = request.form.get('year')
+                movie['poster'] = request.form.get('poster')
+                movie['description'] = request.form.get('description')
+                break
+    return redirect('/admin')
+
 @app.route('/admin/add_episode/<movie_id>', methods=['POST'])
 def add_episode(movie_id):
     if session.get('logged_in'):
@@ -322,7 +365,7 @@ def add_episode(movie_id):
             if movie['id'] == movie_id:
                 ep_num = request.form.get('ep_number')
                 embed_url = request.form.get('embed_url')
-                # التأكد من عدم تكرار الحلقة
+                # عدم التكرار
                 movie['episodes'] = [e for e in movie['episodes'] if e['ep_number'] != ep_num]
                 movie['episodes'].append({"ep_number": ep_num, "embed_url": embed_url})
                 # ترتيب الحلقات تصاعدياً
