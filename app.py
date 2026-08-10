@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from flask import Flask, render_template_string, request, redirect, session, g
 
@@ -6,7 +7,12 @@ app = Flask(__name__)
 # --- إعدادات الأمان وقاعدة البيانات ---
 app.secret_key = 'halal_cinema_ultra_secure_key_2026_x89f'
 ADMIN_PASSWORD = "Halal#CinemaSecured2026!"
-DATABASE = 'halal_cinema.db'
+
+# بيئة Vercel تسمح بالكتابة فقط داخل مجلد /tmp/
+if os.environ.get('VERCEL'):
+    DATABASE = '/tmp/halal_cinema.db'
+else:
+    DATABASE = 'halal_cinema.db'
 
 # --- إدارة الاتصال بقاعدة البيانات ---
 def get_db():
@@ -22,7 +28,7 @@ def close_connection(exception):
     if db is not None:
         db.close()
 
-# --- إنشاء جداول قاعدة البيانات للفظ الدائم ---
+# --- إنشاء جداول قاعدة البيانات ---
 def init_db():
     with app.app_context():
         db = get_db()
@@ -149,7 +155,6 @@ HTML_TEMPLATE = """
 
     <div class="main-container">
 
-        <!-- القسم الترحيبي والتعريفي بمفهوم الموقع -->
         <div class="welcome-hero">
             <span class="badge-halal"><i class="fa-solid fa-shield-halal"></i> سينما آمنة ونظيفة</span>
             <h1>مرحباً بكم في منصة حلال سينما</h1>
@@ -158,7 +163,6 @@ HTML_TEMPLATE = """
             </p>
         </div>
 
-        <!-- مشغل الفيديو -->
         <div class="player-box" id="playerWindow">
             <div class="iframe-container">
                 <iframe id="videoIframe" src="" allowfullscreen></iframe>
@@ -298,10 +302,9 @@ ADMIN_TEMPLATE = """
         {% else %}
 
         <div class="security-badge">
-            <i class="fa-solid fa-database"></i> قاعدة البيانات نشطة ومحمية. لن تتأثر بياناتك بتحديثات الكود!
+            <i class="fa-solid fa-database"></i> قاعدة البيانات نشطة ومحمية.
         </div>
 
-        <!-- إضافة مسلسل جديد -->
         <h3>إضافة مسلسل أو فيلم جديد</h3>
         <form method="POST" action="/admin/add">
             <input type="text" name="title" placeholder="عنوان المسلسل" required>
@@ -318,13 +321,12 @@ ADMIN_TEMPLATE = """
             <input type="text" name="embed_urls" placeholder="روابط Embed للحلقة الأولى" required>
             
             <textarea name="description" placeholder="وصف المسلسل" rows="2"></textarea>
-            <button type="submit" style="width:100%;">إنشاء السلسلة وحفظها دائماً</button>
+            <button type="submit" style="width:100%;">إنشاء السلسلة وحفظها</button>
         </form>
 
         <hr style="border-color: #2d3446; margin: 30px 0;">
 
-        <!-- التحكم بالسلسلة والحلقات -->
-        <h3>إدارة العروض المتاحة في قاعدة البيانات</h3>
+        <h3>إدارة العروض المتاحة</h3>
         {% for movie in movies %}
         <div class="work-box">
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -337,7 +339,6 @@ ADMIN_TEMPLATE = """
                 </div>
             </div>
 
-            <!-- نموذج تعديل -->
             <div id="edit-{{ movie.id }}" class="edit-form">
                 <strong style="color:#f59e0b; font-size:0.85rem;">تعديل البيانات:</strong>
                 <form method="POST" action="/admin/edit/{{ movie.id }}" style="margin-top:8px;">
@@ -351,7 +352,6 @@ ADMIN_TEMPLATE = """
                 </form>
             </div>
 
-            <!-- الحلقات -->
             <div style="margin-top: 15px;">
                 <strong style="font-size: 0.85rem; color: #9ca3af;">الحلقات المحفوظة:</strong>
                 {% for ep in movie.episodes %}
@@ -375,7 +375,7 @@ ADMIN_TEMPLATE = """
                         <input type="number" name="ep_number" placeholder="رقم الحلقة" required style="width: 25%;">
                         <input type="text" name="embed_urls" placeholder="روابط السيرفرات (مفصولة بفاصلة ,)" required>
                     </div>
-                    <button type="submit" class="btn-add-ep">إضافة ورسخ في قاعدة البيانات</button>
+                    <button type="submit" class="btn-add-ep">إضافة الحلقة</button>
                 </form>
             </div>
             {% endif %}
@@ -399,7 +399,6 @@ ADMIN_TEMPLATE = """
 </html>
 """
 
-# --- دالة جلب كل الأفلام والحلقات من قاعدة البيانات ---
 def fetch_all_movies(movie_type=None):
     db = get_db()
     cursor = db.cursor()
@@ -426,7 +425,6 @@ def fetch_all_movies(movie_type=None):
         result.append(m)
     return result
 
-# --- مسارات Flask ---
 @app.route('/')
 def home():
     m_type = request.args.get('type')
