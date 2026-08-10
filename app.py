@@ -1,46 +1,63 @@
-from flask import Flask, render_template_string, request, redirect, session
+import sqlite3
+from flask import Flask, render_template_string, request, redirect, session, g
 
 app = Flask(__name__)
-app.secret_key = 'halal_cinema_super_secret_key'
 
-# كلمة السر
-ADMIN_PASSWORD = "Halal@2026"
+# --- إعدادات الأمان وقاعدة البيانات ---
+app.secret_key = 'halal_cinema_ultra_secure_key_2026_x89f'
+ADMIN_PASSWORD = "Halal#CinemaSecured2026!"
+DATABASE = 'halal_cinema.db'
 
-MOVIES = [
-    {
-        "id": "1",
-        "title": "انمي Kimetsu no Yaiba الموسم الاول",
-        "type": "مسلسل",
-        "category": "أنمي",
-        "year": "2026",
-        "quality": "1080p BluRay",
-        "poster": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=500&q=80",
-        "description": "قصة تانجيرو وأخته نيزوكو ورحلتهما في القضاء على الشياطين.",
-        "episodes": [
-            {
-                "ep_number": "1", 
-                "servers": [
-                    "https://earnvids.xyz/v/eaervqlc2jo9",
-                    "https://dood.so/e/0k1234567890"
-                ]
-            },
-            {
-                "ep_number": "2", 
-                "servers": [
-                    "https://earnvids.xyz/v/eaervqlc2jo9"
-                ]
-            }
-        ]
-    }
-]
+# --- إدارة الاتصال بقاعدة البيانات ---
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DATABASE)
+        db.row_factory = sqlite3.Row
+    return db
 
+@app.teardown_appcontext
+def close_connection(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
+
+# --- إنشاء جداول قاعدة البيانات للفظ الدائم ---
+def init_db():
+    with app.app_context():
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS movies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                type TEXT NOT NULL,
+                year TEXT,
+                poster TEXT NOT NULL,
+                description TEXT
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS episodes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                movie_id INTEGER,
+                ep_number INTEGER NOT NULL,
+                servers TEXT NOT NULL,
+                FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE
+            )
+        ''')
+        db.commit()
+
+init_db()
+
+# --- القوالب وتصميم الواجهات ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HalalCinema - هلال سينما</title>
+    <title>HalalCinema - حلال سينما</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -64,7 +81,20 @@ HTML_TEMPLATE = """
         .nav-link:hover { color: #10b981; }
         .admin-btn { background: #10b981; color: #000; font-weight: 800; padding: 6px 14px; border-radius: 6px; text-decoration: none; font-size: 0.85rem; }
 
-        .main-container { max-width: 1200px; width: 92%; margin: 25px auto; }
+        .welcome-hero {
+            background: linear-gradient(135deg, #12141c 0%, #1a2332 100%);
+            border: 1px solid #10b981;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 20px auto;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1);
+        }
+        .welcome-hero h1 { color: #10b981; font-size: 1.8rem; margin-bottom: 10px; font-weight: 900; }
+        .welcome-hero p { color: #d1d5db; font-size: 1rem; max-width: 800px; margin: 0 auto; line-height: 1.7; }
+        .badge-halal { background: #10b981; color: #000; padding: 3px 10px; border-radius: 20px; font-weight: bold; font-size: 0.8rem; display: inline-block; margin-bottom: 8px; }
+
+        .main-container { max-width: 1200px; width: 92%; margin: 10px auto; }
 
         .player-box {
             display: none;
@@ -119,6 +149,15 @@ HTML_TEMPLATE = """
 
     <div class="main-container">
 
+        <!-- القسم الترحيبي والتعريفي بمفهوم الموقع -->
+        <div class="welcome-hero">
+            <span class="badge-halal"><i class="fa-solid fa-shield-halal"></i> سينما آمنة ونظيفة</span>
+            <h1>مرحباً بكم في منصة حلال سينما</h1>
+            <p>
+                نحن نمكنكم من مشاهدة ممتعة ومحتوى عائلي آمن. جميع الأفلام والمسلسلات المتاحة تم مراجعتها وتعديلها وتقطيع المشاهد واللقطات التي لا تتناسب مع قيمنا وثقافتنا الإسلامية وعاداتنا العربية، لنقدم لكم الفن بأسلوب نقي وراقي.
+            </p>
+        </div>
+
         <!-- مشغل الفيديو -->
         <div class="player-box" id="playerWindow">
             <div class="iframe-container">
@@ -127,7 +166,6 @@ HTML_TEMPLATE = """
             <div class="player-info">
                 <h2 id="videoTitle"></h2>
                 
-                <!-- سيرفرات المشاهدة -->
                 <div id="serversSection" style="margin-top: 10px;">
                     <span style="color:#f59e0b; font-weight:bold; font-size:0.9rem;"><i class="fa-solid fa-server"></i> اختر السيرفر:</span>
                     <div class="servers-bar" id="serversList"></div>
@@ -143,7 +181,7 @@ HTML_TEMPLATE = """
         </div>
 
         <div class="grid-header">
-            <h3>قائمة العروض والمسلسلات</h3>
+            <h3>قائمة العروض والمسلسلات المتاحة</h3>
         </div>
 
         <div class="movies-grid">
@@ -153,7 +191,7 @@ HTML_TEMPLATE = """
                     <img src="{{ movie.poster }}" alt="{{ movie.title }}">
                     <div class="card-overlay">
                         <div class="movie-name">{{ movie.title }}</div>
-                        <span style="font-size:0.75rem; color:#10b981; font-weight:bold;"><i class="fa-solid fa-play"></i> مشاهدة السلسلة</span>
+                        <span style="font-size:0.75rem; color:#10b981; font-weight:bold;"><i class="fa-solid fa-play"></i> مشاهدة العرض</span>
                     </div>
                 </div>
             </div>
@@ -163,10 +201,7 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
-        let currentMovieData = null;
-
         function playMovie(movie) {
-            currentMovieData = movie;
             document.getElementById('playerWindow').style.display = 'block';
             document.getElementById('videoTitle').innerText = movie.title;
             document.getElementById('videoDesc').innerText = movie.description;
@@ -176,7 +211,6 @@ HTML_TEMPLATE = """
             epList.innerHTML = '';
 
             if (movie.episodes && movie.episodes.length > 0) {
-                // عرض السيرفرات للحلقة الأولى
                 loadEpisodeServers(movie.episodes[0]);
 
                 if (movie.type === 'مسلسل') {
@@ -202,9 +236,7 @@ HTML_TEMPLATE = """
         function loadEpisodeServers(ep) {
             const serversList = document.getElementById('serversList');
             serversList.innerHTML = '';
-            
-            // التأكد من دعم الصيغ القديمة والجديدة للروابط
-            let servers = ep.servers || (ep.embed_url ? [ep.embed_url] : []);
+            let servers = ep.servers || [];
 
             if (servers.length > 0) {
                 document.getElementById('videoIframe').src = servers[0];
@@ -233,7 +265,7 @@ ADMIN_TEMPLATE = """
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>لوحة التحكم - HalalCinema</title>
+    <title>لوحة التحكم المحمية - حلال سينما</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800&display=swap" rel="stylesheet">
     <style>
         body { background: #0b0c10; color: #fff; font-family: 'Cairo', sans-serif; padding: 30px 15px; }
@@ -250,24 +282,29 @@ ADMIN_TEMPLATE = """
         .edit-form { background: #111827; padding: 12px; border-radius: 8px; margin-top: 10px; display: none; border: 1px dashed #f59e0b; }
         .back-link { display: block; text-align: center; margin-top: 15px; color: #9ca3af; text-decoration: none; }
         .hint { color: #f59e0b; font-size: 0.75rem; margin-bottom: 8px; display: block; }
+        .security-badge { background: #10b98122; border: 1px solid #10b981; color: #10b981; padding: 8px; border-radius: 6px; text-align: center; font-size: 0.85rem; margin-bottom: 20px; }
     </style>
 </head>
 <body>
 
     <div class="admin-card">
-        <h2>إدارة المسلسلات والسيرفرات 🎬</h2>
+        <h2>لوحة التحكم المحمية - حلال سينما 🔒</h2>
 
         {% if not logged_in %}
         <form method="POST" action="/admin/login">
-            <input type="password" name="password" placeholder="أدخل كلمة المرور" required>
-            <button type="submit" style="width:100%;">دخول</button>
+            <input type="password" name="password" placeholder="أدخل كلمة المرور المشفرة" required>
+            <button type="submit" style="width:100%;">دخول أمن</button>
         </form>
         {% else %}
+
+        <div class="security-badge">
+            <i class="fa-solid fa-database"></i> قاعدة البيانات نشطة ومحمية. لن تتأثر بياناتك بتحديثات الكود!
+        </div>
 
         <!-- إضافة مسلسل جديد -->
         <h3>إضافة مسلسل أو فيلم جديد</h3>
         <form method="POST" action="/admin/add">
-            <input type="text" name="title" placeholder="عنوان المسلسل (مثال: Kimetsu no Yaiba)" required>
+            <input type="text" name="title" placeholder="عنوان المسلسل" required>
             <div class="row">
                 <select name="type">
                     <option value="مسلسل">مسلسل</option>
@@ -277,72 +314,68 @@ ADMIN_TEMPLATE = """
             </div>
             <input type="text" name="poster" placeholder="رابط صورة البوستر (URL)" required>
             
-            <span class="hint">💡 لإضافة أكثر من سيرفر للحلقة الأولى، افصل بين الروابط بفاصلة ( , )</span>
-            <input type="text" name="embed_urls" placeholder="روابط Embed (مثال: رابط1 , رابط2 , رابط3)" required>
+            <span class="hint">💡 افصل بين سيرفرات الحلقة الأولى بفاصلة ( , )</span>
+            <input type="text" name="embed_urls" placeholder="روابط Embed للحلقة الأولى" required>
             
             <textarea name="description" placeholder="وصف المسلسل" rows="2"></textarea>
-            <button type="submit" style="width:100%;">إنشاء السلسلة</button>
+            <button type="submit" style="width:100%;">إنشاء السلسلة وحفظها دائماً</button>
         </form>
 
         <hr style="border-color: #2d3446; margin: 30px 0;">
 
-        <!-- التحكم بالحلقات والسيرفرات -->
-        <h3>إدارة السلسلة وإضافة السيرفرات</h3>
+        <!-- التحكم بالسلسلة والحلقات -->
+        <h3>إدارة العروض المتاحة في قاعدة البيانات</h3>
         {% for movie in movies %}
         <div class="work-box">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h4>{{ movie.title }} <span style="font-size:0.8rem; color:#10b981;">({{ movie.type }})</span></h4>
                 <div style="display:flex; gap:6px;">
-                    <button type="button" class="btn-warning" onclick="toggleEdit('edit-{{ movie.id }}')">تعديل البيانات</button>
+                    <button type="button" class="btn-warning" onclick="toggleEdit('edit-{{ movie.id }}')">تعديل</button>
                     <form method="POST" action="/admin/delete/{{ movie.id }}" style="margin:0;">
-                        <button type="submit" class="btn-danger" onclick="return confirm('حذف العمل بالكامل؟')">حذف المسلسل</button>
+                        <button type="submit" class="btn-danger" onclick="return confirm('حذف هذا العمل نهائياً؟')">حذف</button>
                     </form>
                 </div>
             </div>
 
-            <!-- نموذج تعديل معلومات السلسلة -->
+            <!-- نموذج تعديل -->
             <div id="edit-{{ movie.id }}" class="edit-form">
-                <strong style="color:#f59e0b; font-size:0.85rem;">تعديل بيانات السلسلة:</strong>
+                <strong style="color:#f59e0b; font-size:0.85rem;">تعديل البيانات:</strong>
                 <form method="POST" action="/admin/edit/{{ movie.id }}" style="margin-top:8px;">
-                    <input type="text" name="title" value="{{ movie.title }}" required placeholder="العنوان">
+                    <input type="text" name="title" value="{{ movie.title }}" required>
                     <div class="row">
-                        <input type="text" name="year" value="{{ movie.year }}" placeholder="السنة">
-                        <input type="text" name="poster" value="{{ movie.poster }}" required placeholder="رابط البوستر">
+                        <input type="text" name="year" value="{{ movie.year }}">
+                        <input type="text" name="poster" value="{{ movie.poster }}" required>
                     </div>
-                    <textarea name="description" rows="2" placeholder="الوصف">{{ movie.description }}</textarea>
-                    <button type="submit" style="background:#f59e0b; color:#000; width:100%;">حفظ التعديلات</button>
+                    <textarea name="description" rows="2">{{ movie.description }}</textarea>
+                    <button type="submit" style="background:#f59e0b; color:#000; width:100%;">تحديث</button>
                 </form>
             </div>
 
-            <!-- قائمة الحلقات الحالية -->
+            <!-- الحلقات -->
             <div style="margin-top: 15px;">
-                <strong style="font-size: 0.85rem; color: #9ca3af;">الحلقات والسيرفرات المضافة:</strong>
+                <strong style="font-size: 0.85rem; color: #9ca3af;">الحلقات المحفوظة:</strong>
                 {% for ep in movie.episodes %}
                 <div class="ep-item">
                     <span>
                         <strong>الحلقة {{ ep.ep_number }}</strong> — 
-                        <small style="color: #f59e0b;">
-                            عدد السيرفرات: {{ ep.servers | length if ep.servers else 1 }}
-                        </small>
+                        <small style="color: #f59e0b;">سيرفرات: {{ ep.servers | length }}</small>
                     </span>
-                    <form method="POST" action="/admin/delete_ep/{{ movie.id }}/{{ ep.ep_number }}" style="margin:0;">
-                        <button type="submit" style="background:#ef4444; color:#fff; padding:3px 8px; font-size:0.75rem;">حذف الحلقة</button>
+                    <form method="POST" action="/admin/delete_ep/{{ ep.id }}" style="margin:0;">
+                        <button type="submit" style="background:#ef4444; color:#fff; padding:3px 8px; font-size:0.75rem;">حذف</button>
                     </form>
                 </div>
                 {% endfor %}
             </div>
 
-            <!-- إضافة حلقة جديدة بـ 2 أو 3 سيرفرات -->
             {% if movie.type == 'مسلسل' %}
             <div style="margin-top: 15px; background: #12141c; padding: 10px; border-radius: 6px;">
-                <strong style="color: #10b981; font-size: 0.85rem;">+ إضافة حلقة بسيرفرات متعددة:</strong>
-                <span class="hint">💡 ضع أكثر من رابط وفصل بينها بفاصلة ( , ) لإنشاء (سيرفر 1، سيرفر 2...)</span>
+                <strong style="color: #10b981; font-size: 0.85rem;">+ إضافة حلقة جديدة:</strong>
                 <form method="POST" action="/admin/add_episode/{{ movie.id }}" style="margin-top: 8px;">
                     <div class="row">
                         <input type="number" name="ep_number" placeholder="رقم الحلقة" required style="width: 25%;">
-                        <input type="text" name="embed_urls" placeholder="روابط السيرفرات (مثال: رابط1 , رابط2)" required>
+                        <input type="text" name="embed_urls" placeholder="روابط السيرفرات (مفصولة بفاصلة ,)" required>
                     </div>
-                    <button type="submit" class="btn-add-ep">إضافة الحلقة بالسيرفرات</button>
+                    <button type="submit" class="btn-add-ep">إضافة ورسخ في قاعدة البيانات</button>
                 </form>
             </div>
             {% endif %}
@@ -350,7 +383,7 @@ ADMIN_TEMPLATE = """
         </div>
         {% endfor %}
 
-        <a href="/admin/logout" class="back-link">تسجيل الخروج</a>
+        <a href="/admin/logout" class="back-link">تسجيل الخروج الأمن</a>
         {% endif %}
         <a href="/" class="back-link">العودة للواجهة الرئيسية</a>
     </div>
@@ -366,20 +399,44 @@ ADMIN_TEMPLATE = """
 </html>
 """
 
-def parse_urls(url_string):
-    if not url_string: return []
-    return [u.strip() for u in url_string.split(',') if u.strip()]
+# --- دالة جلب كل الأفلام والحلقات من قاعدة البيانات ---
+def fetch_all_movies(movie_type=None):
+    db = get_db()
+    cursor = db.cursor()
+    if movie_type:
+        cursor.execute("SELECT * FROM movies WHERE type = ? ORDER BY id DESC", (movie_type,))
+    else:
+        cursor.execute("SELECT * FROM movies ORDER BY id DESC")
+    
+    movies_rows = cursor.fetchall()
+    result = []
+    
+    for row in movies_rows:
+        m = dict(row)
+        cursor.execute("SELECT * FROM episodes WHERE movie_id = ? ORDER BY ep_number ASC", (m['id'],))
+        ep_rows = cursor.fetchall()
+        episodes = []
+        for ep in ep_rows:
+            episodes.append({
+                "id": ep['id'],
+                "ep_number": ep['ep_number'],
+                "servers": [s.strip() for s in ep['servers'].split(',') if s.strip()]
+            })
+        m['episodes'] = episodes
+        result.append(m)
+    return result
 
+# --- مسارات Flask ---
 @app.route('/')
 def home():
     m_type = request.args.get('type')
-    filtered = MOVIES
-    if m_type: filtered = [m for m in filtered if m['type'] == m_type]
-    return render_template_string(HTML_TEMPLATE, movies=filtered)
+    movies = fetch_all_movies(m_type)
+    return render_template_string(HTML_TEMPLATE, movies=movies)
 
 @app.route('/admin')
 def admin():
-    return render_template_string(ADMIN_TEMPLATE, logged_in=session.get('logged_in'), movies=MOVIES)
+    movies = fetch_all_movies() if session.get('logged_in') else []
+    return render_template_string(ADMIN_TEMPLATE, logged_in=session.get('logged_in'), movies=movies)
 
 @app.route('/admin/login', methods=['POST'])
 def admin_login():
@@ -390,62 +447,63 @@ def admin_login():
 @app.route('/admin/add', methods=['POST'])
 def admin_add():
     if session.get('logged_in'):
-        urls = parse_urls(request.form.get('embed_urls'))
-        new_item = {
-            "id": str(len(MOVIES) + 1),
-            "title": request.form.get('title'),
-            "type": request.form.get('type'),
-            "year": request.form.get('year'),
-            "poster": request.form.get('poster'),
-            "description": request.form.get('description'),
-            "episodes": [
-                {"ep_number": "1", "servers": urls}
-            ]
-        }
-        MOVIES.insert(0, new_item)
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            "INSERT INTO movies (title, type, year, poster, description) VALUES (?, ?, ?, ?, ?)",
+            (request.form.get('title'), request.form.get('type'), request.form.get('year'), request.form.get('poster'), request.form.get('description'))
+        )
+        movie_id = cursor.lastrowid
+        urls = request.form.get('embed_urls')
+        cursor.execute(
+            "INSERT INTO episodes (movie_id, ep_number, servers) VALUES (?, ?, ?)",
+            (movie_id, 1, urls)
+        )
+        db.commit()
     return redirect('/admin')
 
-@app.route('/admin/edit/<movie_id>', methods=['POST'])
+@app.route('/admin/edit/<int:movie_id>', methods=['POST'])
 def edit_movie(movie_id):
     if session.get('logged_in'):
-        for movie in MOVIES:
-            if movie['id'] == movie_id:
-                movie['title'] = request.form.get('title')
-                movie['year'] = request.form.get('year')
-                movie['poster'] = request.form.get('poster')
-                movie['description'] = request.form.get('description')
-                break
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            "UPDATE movies SET title = ?, year = ?, poster = ?, description = ? WHERE id = ?",
+            (request.form.get('title'), request.form.get('year'), request.form.get('poster'), request.form.get('description'), movie_id)
+        )
+        db.commit()
     return redirect('/admin')
 
-@app.route('/admin/add_episode/<movie_id>', methods=['POST'])
+@app.route('/admin/add_episode/<int:movie_id>', methods=['POST'])
 def add_episode(movie_id):
     if session.get('logged_in'):
-        for movie in MOVIES:
-            if movie['id'] == movie_id:
-                ep_num = request.form.get('ep_number')
-                urls = parse_urls(request.form.get('embed_urls'))
-                
-                # استبدال وتحديث الحلقة إن كانت موجودة سابقاً بدلاً من تكرارها
-                movie['episodes'] = [e for e in movie['episodes'] if e['ep_number'] != ep_num]
-                movie['episodes'].append({"ep_number": ep_num, "servers": urls})
-                movie['episodes'].sort(key=lambda x: int(x['ep_number']))
-                break
+        db = get_db()
+        cursor = db.cursor()
+        ep_num = request.form.get('ep_number')
+        urls = request.form.get('embed_urls')
+        
+        cursor.execute("DELETE FROM episodes WHERE movie_id = ? AND ep_number = ?", (movie_id, ep_num))
+        cursor.execute("INSERT INTO episodes (movie_id, ep_number, servers) VALUES (?, ?, ?)", (movie_id, ep_num, urls))
+        db.commit()
     return redirect('/admin')
 
-@app.route('/admin/delete_ep/<movie_id>/<ep_num>', methods=['POST'])
-def delete_ep(movie_id, ep_num):
+@app.route('/admin/delete_ep/<int:ep_id>', methods=['POST'])
+def delete_ep(ep_id):
     if session.get('logged_in'):
-        for movie in MOVIES:
-            if movie['id'] == movie_id:
-                movie['episodes'] = [e for e in movie['episodes'] if e['ep_number'] != ep_num]
-                break
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("DELETE FROM episodes WHERE id = ?", (ep_id,))
+        db.commit()
     return redirect('/admin')
 
-@app.route('/admin/delete/<movie_id>', methods=['POST'])
+@app.route('/admin/delete/<int:movie_id>', methods=['POST'])
 def delete_movie(movie_id):
-    global MOVIES
     if session.get('logged_in'):
-        MOVIES = [m for m in MOVIES if m['id'] != movie_id]
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("DELETE FROM movies WHERE id = ?", (movie_id,))
+        cursor.execute("DELETE FROM episodes WHERE movie_id = ?", (movie_id,))
+        db.commit()
     return redirect('/admin')
 
 @app.route('/admin/logout')
