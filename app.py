@@ -88,6 +88,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google-site-verification" content="5wjEorvbR_yiK2Dv0c70ZPqbSNhJ7L9lRBTPnURqB8Q" />
     <title>HalalCinema - حلال سينما</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -629,6 +630,11 @@ def admin_login():
         session['logged_in'] = True
     return redirect('/admin')
 
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('logged_in', None)
+    return redirect('/admin')
+
 @app.route('/admin/add', methods=['POST'])
 def admin_add():
     if session.get('logged_in'):
@@ -662,6 +668,16 @@ def edit_movie(movie_id):
         cursor.close()
     return redirect('/admin')
 
+@app.route('/admin/delete/<int:movie_id>', methods=['POST'])
+def delete_movie(movie_id):
+    if session.get('logged_in'):
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("DELETE FROM movies WHERE id = %s", (movie_id,))
+        db.commit()
+        cursor.close()
+    return redirect('/admin')
+
 @app.route('/admin/add_episode/<int:movie_id>', methods=['POST'])
 def add_episode(movie_id):
     if session.get('logged_in'):
@@ -687,56 +703,31 @@ def delete_ep(ep_id):
         cursor.close()
     return redirect('/admin')
 
-@app.route('/admin/delete/<int:movie_id>', methods=['POST'])
-def delete_movie(movie_id):
-    if session.get('logged_in'):
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute("DELETE FROM comments WHERE movie_id = %s", (movie_id,))
-        cursor.execute("DELETE FROM episodes WHERE movie_id = %s", (movie_id,))
-        cursor.execute("DELETE FROM movies WHERE id = %s", (movie_id,))
-        db.commit()
-        cursor.close()
-    return redirect('/admin')
-
-# --- API اللايكات والتعليقات ---
 @app.route('/api/like/<int:movie_id>', methods=['POST'])
-def like_movie(movie_id):
+def add_like(movie_id):
     db = get_db()
     cursor = db.cursor()
     cursor.execute("UPDATE movies SET likes_count = likes_count + 1 WHERE id = %s RETURNING likes_count", (movie_id,))
-    updated = cursor.fetchone()
+    new_likes = cursor.fetchone()['likes_count']
     db.commit()
     cursor.close()
-    return jsonify({"likes": updated['likes_count'] if updated else 0})
+    return jsonify({'likes': new_likes})
 
-@app.route('/api/comments/<int:movie_id>', methods=['GET'])
-def get_comments(movie_id):
+@app.route('/api/comments/<int:movie_id>', methods=['GET', 'POST'])
+def handle_comments(movie_id):
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("SELECT user_name, comment_text FROM comments WHERE movie_id = %s ORDER BY id DESC", (movie_id,))
-    comments = cursor.fetchall()
-    cursor.close()
-    return jsonify(list(comments))
-
-@app.route('/api/comments/<int:movie_id>', methods=['POST'])
-def add_comment(movie_id):
-    data = request.json
-    if data and data.get('user_name') and data.get('comment_text'):
-        db = get_db()
-        cursor = db.cursor()
+    if request.method == 'POST':
+        data = request.get_json()
         cursor.execute(
             "INSERT INTO comments (movie_id, user_name, comment_text) VALUES (%s, %s, %s)",
-            (movie_id, data['user_name'], data['comment_text'])
+            (movie_id, data.get('user_name'), data.get('comment_text'))
         )
         db.commit()
         cursor.close()
-    return jsonify({"status": "ok"})
-
-@app.route('/admin/logout')
-def admin_logout():
-    session.pop('logged_in', None)
-    return redirect('/admin')
-
-if __name__ == '__main__':
-    app.run()
+        return jsonify({'status': 'success'})
+    else:
+        cursor.execute("SELECT user_name, comment_text, created_at FROM comments WHERE movie_id = %s ORDER BY id DESC", (movie_id,))
+        comments = cursor.fetchall()
+        cursor.close()
+        return jsonify(comments)
