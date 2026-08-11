@@ -69,7 +69,7 @@ HTML_TEMPLATE = """
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', sans-serif; }
-        body { background-color: #0b0c10; color: #ffffff; min-height: 100vh; padding-bottom: 50px; }
+        body { background-color: #0b0c10; color: #ffffff; min-height: 100vh; display: flex; flex-direction: column; }
         
         header {
             background: #12141c;
@@ -101,7 +101,7 @@ HTML_TEMPLATE = """
         .welcome-hero p { color: #d1d5db; font-size: 1rem; max-width: 800px; margin: 0 auto; line-height: 1.7; }
         .badge-halal { background: #10b981; color: #000; padding: 3px 10px; border-radius: 20px; font-weight: bold; font-size: 0.8rem; display: inline-block; margin-bottom: 8px; }
 
-        .main-container { max-width: 1200px; width: 92%; margin: 10px auto; }
+        .main-container { max-width: 1200px; width: 92%; margin: 10px auto; flex: 1; }
 
         .player-box {
             display: none;
@@ -140,6 +140,35 @@ HTML_TEMPLATE = """
         .poster-wrapper img { width: 100%; height: 100%; object-fit: cover; }
         .card-overlay { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, #0b0c10, transparent); padding: 15px 10px; text-align: center; }
         .movie-name { font-size: 0.9rem; font-weight: 700; }
+
+        /* --- Footer Styles --- */
+        footer {
+            background: #12141c;
+            border-top: 2px solid #1f2430;
+            padding: 30px 4% 15px;
+            margin-top: 50px;
+            text-align: center;
+        }
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .footer-links a {
+            color: #9ca3af;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+        .footer-links a:hover { color: #10b981; }
+        .footer-copy {
+            color: #6b7280;
+            font-size: 0.8rem;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -204,6 +233,17 @@ HTML_TEMPLATE = """
         </div>
 
     </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-links">
+            <a href="#">سياسة الخصوصية</a>
+            <a href="#">شروط الاستخدام</a>
+            <a href="#">إخلاء المسؤولية</a>
+            <a href="#">اتصل بنا</a>
+        </div>
+        <p class="footer-copy">جميع الحقوق محفوظة © 2026 لموقع حلال سينما - سينما آمنة ونظيفة للجميع</p>
+    </footer>
 
     <script>
         function playMovie(movie) {
