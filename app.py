@@ -1,7 +1,7 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from flask import Flask, render_template_string, request, redirect, session, g, jsonify
+from flask import Flask, render_template_string, request, redirect, session, g, jsonify, Response
 
 app = Flask(__name__)
 
@@ -618,6 +618,47 @@ def home():
     m_type = request.args.get('type')
     movies = fetch_all_movies(m_type)
     return render_template_string(HTML_TEMPLATE, movies=movies)
+
+# --- مسار خريطة الموقع (Sitemap.xml) ---
+@app.route('/sitemap.xml', methods=['GET'])
+def sitemap():
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("SELECT id FROM movies ORDER BY id DESC")
+        movies = cursor.fetchall()
+        cursor.close()
+
+        xml = ['<?xml version="1.0" encoding="UTF-8"?>']
+        xml.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
+        
+        # الصفحة الرئيسية
+        xml.append('  <url>')
+        xml.append('    <loc>https://halal-cinema.vercel.app/</loc>')
+        xml.append('    <changefreq>daily</changefreq>')
+        xml.append('    <priority>1.0</priority>')
+        xml.append('  </url>')
+
+        # قسم الأفلام
+        xml.append('  <url>')
+        xml.append('    <loc>https://halal-cinema.vercel.app/?type=%D9%81%D9%8A%D9%84%D9%85</loc>')
+        xml.append('    <changefreq>daily</changefreq>')
+        xml.append('    <priority>0.8</priority>')
+        xml.append('  </url>')
+
+        # قسم المسلسلات
+        xml.append('  <url>')
+        xml.append('    <loc>https://halal-cinema.vercel.app/?type=%D9%85%D8%B3%D9%84%D8%B3%D9%84</loc>')
+        xml.append('    <changefreq>daily</changefreq>')
+        xml.append('    <priority>0.8</priority>')
+        xml.append('  </url>')
+
+        xml.append('</urlset>')
+
+        sitemap_xml = "\n".join(xml)
+        return Response(sitemap_xml, mimetype='text/xml')
+    except Exception as e:
+        return str(e), 500
 
 @app.route('/admin')
 def admin():
