@@ -1,7 +1,7 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from flask import Flask, render_template_string, request, redirect, session, g
+from flask import Flask, render_template_string, request, redirect, session, g, jsonify
 
 app = Flask(__name__)
 
@@ -25,12 +25,14 @@ def close_connection(exception):
     if db is not None:
         db.close()
 
-# --- إنشاء جداول قاعدة البيانات السحابية ---
+# --- إنشاء وتحديث جداول قاعدة البيانات السحابية ---
 def init_db():
     try:
         if DATABASE_URL:
             db = psycopg2.connect(DATABASE_URL)
             cursor = db.cursor()
+            
+            # جدول الأفلام والمسلسلات
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS movies (
                     id SERIAL PRIMARY KEY,
@@ -38,17 +40,39 @@ def init_db():
                     type TEXT NOT NULL,
                     year TEXT,
                     poster TEXT NOT NULL,
-                    description TEXT
+                    description TEXT,
+                    rating TEXT DEFAULT '⭐ 8.0/10',
+                    likes_count INTEGER DEFAULT 0
                 );
             ''')
+            
+            # التأكد من وجود أعمدة التقييم واللايكات
+            cursor.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS rating TEXT DEFAULT '⭐ 8.0/10';")
+            cursor.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS likes_count INTEGER DEFAULT 0;")
+
+            # جدول الحلقات والسيرفرات
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS episodes (
                     id SERIAL PRIMARY KEY,
                     movie_id INTEGER REFERENCES movies(id) ON DELETE CASCADE,
                     ep_number INTEGER NOT NULL,
-                    servers TEXT NOT NULL
+                    servers TEXT NOT NULL,
+                    download_url TEXT
                 );
             ''')
+            cursor.execute("ALTER TABLE episodes ADD COLUMN IF NOT EXISTS download_url TEXT;")
+
+            # جدول التعليقات
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS comments (
+                    id SERIAL PRIMARY KEY,
+                    movie_id INTEGER REFERENCES movies(id) ON DELETE CASCADE,
+                    user_name TEXT NOT NULL,
+                    comment_text TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            ''')
+
             db.commit()
             cursor.close()
             db.close()
@@ -114,15 +138,49 @@ HTML_TEMPLATE = """
         .iframe-container { position: relative; padding-bottom: 56.25%; height: 0; background: #000; }
         .iframe-container iframe { position: absolute; top:0; left:0; width:100%; height:100%; border:0; }
         .player-info { padding: 20px; }
-        .player-info h2 { color: #10b981; font-weight: 800; margin-bottom: 8px; font-size: 1.4rem; }
+        
+        .movie-title-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+        .movie-title-row h2 { color: #10b981; font-weight: 800; font-size: 1.5rem; }
+        
+        .meta-badges { display: flex; gap: 10px; align-items: center; }
+        .rating-badge { background: #f59e0b; color: #000; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 0.85rem; }
+        .like-btn { background: #1f2937; color: #ef4444; border: 1px solid #ef4444; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-weight: 800; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; transition: 0.2s; }
+        .like-btn:hover { background: #ef4444; color: #fff; }
 
-        .servers-bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; background: #111827; padding: 10px; border-radius: 8px; border: 1px solid #1f2430; }
+        .action-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin: 15px 0; background: #111827; padding: 12px; border-radius: 8px; border: 1px solid #1f2430; }
+        .servers-bar { display: flex; gap: 8px; flex-wrap: wrap; }
         .server-btn { background: #374151; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.85rem; }
         .server-btn:hover, .server-btn.active { background: #f59e0b; color: #000; }
+
+        .download-btn {
+            background: #10b981;
+            color: #000;
+            text-decoration: none;
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-weight: 800;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: 0.2s;
+        }
+        .download-btn:hover { background: #34d399; }
 
         .episodes-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; background: #1a1d28; padding: 15px; border-radius: 8px; }
         .ep-btn { background: #2d3446; color: #fff; border: 1px solid #10b981; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.9rem; }
         .ep-btn:hover, .ep-btn.active { background: #10b981; color: #000; }
+
+        /* قسم التعليقات */
+        .comments-section { margin-top: 25px; border-top: 1px solid #1f2430; padding-top: 20px; }
+        .comments-section h3 { color: #10b981; font-size: 1.1rem; margin-bottom: 12px; }
+        .comment-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+        .comment-form input, .comment-form textarea { background: #1a1d28; border: 1px solid #2d3446; color: #fff; padding: 10px; border-radius: 6px; font-size: 0.9rem; }
+        .comment-form button { background: #10b981; color: #000; font-weight: 800; border: none; padding: 10px; border-radius: 6px; cursor: pointer; }
+        .comments-list { display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; }
+        .comment-item { background: #1a1d28; padding: 10px 14px; border-radius: 8px; border-right: 3px solid #10b981; }
+        .comment-item strong { color: #f59e0b; font-size: 0.85rem; }
+        .comment-item p { color: #d1d5db; font-size: 0.88rem; margin-top: 4px; }
 
         .grid-header { border-right: 4px solid #10b981; padding-right: 12px; margin-bottom: 20px; }
         .movies-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 18px; }
@@ -134,14 +192,15 @@ HTML_TEMPLATE = """
             cursor: pointer;
             border: 1px solid #1f2430;
             transition: transform 0.25s ease;
+            position: relative;
         }
         .movie-card:hover { transform: translateY(-6px); border-color: #10b981; }
         .poster-wrapper { position: relative; width: 100%; height: 270px; }
         .poster-wrapper img { width: 100%; height: 100%; object-fit: cover; }
+        .card-rating-badge { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: #f59e0b; padding: 3px 8px; border-radius: 5px; font-size: 0.75rem; font-weight: 800; border: 1px solid #f59e0b; }
         .card-overlay { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, #0b0c10, transparent); padding: 15px 10px; text-align: center; }
         .movie-name { font-size: 0.9rem; font-weight: 700; }
 
-        /* --- Footer Styles --- */
         footer {
             background: #12141c;
             border-top: 2px solid #1f2430;
@@ -149,26 +208,10 @@ HTML_TEMPLATE = """
             margin-top: 50px;
             text-align: center;
         }
-        .footer-links {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            flex-wrap: wrap;
-            margin-bottom: 15px;
-        }
-        .footer-links a {
-            color: #9ca3af;
-            text-decoration: none;
-            font-size: 0.85rem;
-            font-weight: 600;
-            transition: color 0.2s;
-        }
+        .footer-links { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-bottom: 15px; }
+        .footer-links a { color: #9ca3af; text-decoration: none; font-size: 0.85rem; font-weight: 600; }
         .footer-links a:hover { color: #10b981; }
-        .footer-copy {
-            color: #6b7280;
-            font-size: 0.8rem;
-            margin-top: 10px;
-        }
+        .footer-copy { color: #6b7280; font-size: 0.8rem; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -198,11 +241,26 @@ HTML_TEMPLATE = """
                 <iframe id="videoIframe" src="" allowfullscreen></iframe>
             </div>
             <div class="player-info">
-                <h2 id="videoTitle"></h2>
                 
-                <div id="serversSection" style="margin-top: 10px;">
-                    <span style="color:#f59e0b; font-weight:bold; font-size:0.9rem;"><i class="fa-solid fa-server"></i> اختر السيرفر:</span>
-                    <div class="servers-bar" id="serversList"></div>
+                <div class="movie-title-row">
+                    <h2 id="videoTitle"></h2>
+                    <div class="meta-badges">
+                        <span class="rating-badge" id="videoRating">⭐ --</span>
+                        <button class="like-btn" id="likeBtn" onclick="addLike()">
+                            <i class="fa-solid fa-heart"></i> <span id="likeCount">0</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="action-bar" id="serversSection">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="color:#f59e0b; font-weight:bold; font-size:0.9rem;"><i class="fa-solid fa-server"></i> اختر السيرفر:</span>
+                        <div class="servers-bar" id="serversList"></div>
+                    </div>
+
+                    <a href="#" id="downloadLinkBtn" target="_blank" class="download-btn" style="display:none;">
+                        <i class="fa-solid fa-download"></i> تحميل الفيلم
+                    </a>
                 </div>
 
                 <p id="videoDesc" style="color: #9ca3af; font-size: 0.9rem; margin-top:10px;"></p>
@@ -211,6 +269,20 @@ HTML_TEMPLATE = """
                     <h4 style="color:#10b981; margin-bottom:10px;">قائمة الحلقات:</h4>
                     <div class="episodes-bar" id="episodesList"></div>
                 </div>
+
+                <!-- قسم التعليقات -->
+                <div class="comments-section">
+                    <h3><i class="fa-solid fa-comments"></i> تعليقات الزوار:</h3>
+                    
+                    <form class="comment-form" onsubmit="submitComment(event)">
+                        <input type="text" id="commentUser" placeholder="اسمك الكريم..." required>
+                        <textarea id="commentText" placeholder="اكتب رأيك في الفيلم/المسلسل..." rows="2" required></textarea>
+                        <button type="submit">إضافة التعليق</button>
+                    </form>
+
+                    <div class="comments-list" id="commentsList"></div>
+                </div>
+
             </div>
         </div>
 
@@ -223,6 +295,7 @@ HTML_TEMPLATE = """
             <div class="movie-card" onclick='playMovie({{ movie | tojson }})'>
                 <div class="poster-wrapper">
                     <img src="{{ movie.poster }}" alt="{{ movie.title }}">
+                    <div class="card-rating-badge">{{ movie.rating }}</div>
                     <div class="card-overlay">
                         <div class="movie-name">{{ movie.title }}</div>
                         <span style="font-size:0.75rem; color:#10b981; font-weight:bold;"><i class="fa-solid fa-play"></i> مشاهدة العرض</span>
@@ -234,7 +307,6 @@ HTML_TEMPLATE = """
 
     </div>
 
-    <!-- Footer -->
     <footer>
         <div class="footer-links">
             <a href="#">سياسة الخصوصية</a>
@@ -246,10 +318,17 @@ HTML_TEMPLATE = """
     </footer>
 
     <script>
+        let currentMovieId = null;
+
         function playMovie(movie) {
+            currentMovieId = movie.id;
             document.getElementById('playerWindow').style.display = 'block';
             document.getElementById('videoTitle').innerText = movie.title;
             document.getElementById('videoDesc').innerText = movie.description;
+            document.getElementById('videoRating').innerText = movie.rating || '⭐ 8.0/10';
+            document.getElementById('likeCount').innerText = movie.likes_count || 0;
+
+            loadComments(movie.id);
 
             const epSection = document.getElementById('episodesSection');
             const epList = document.getElementById('episodesList');
@@ -280,6 +359,7 @@ HTML_TEMPLATE = """
 
         function loadEpisodeServers(ep) {
             const serversList = document.getElementById('serversList');
+            const downloadBtn = document.getElementById('downloadLinkBtn');
             serversList.innerHTML = '';
             let servers = ep.servers || [];
 
@@ -298,6 +378,59 @@ HTML_TEMPLATE = """
                     serversList.appendChild(sBtn);
                 });
             }
+
+            if (ep.download_url && ep.download_url.trim() !== '') {
+                downloadBtn.href = ep.download_url;
+                downloadBtn.style.display = 'inline-flex';
+            } else {
+                downloadBtn.style.display = 'none';
+            }
+        }
+
+        function addLike() {
+            if (!currentMovieId) return;
+            fetch('/api/like/' + currentMovieId, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.likes !== undefined) {
+                        document.getElementById('likeCount').innerText = data.likes;
+                    }
+                });
+        }
+
+        function loadComments(movieId) {
+            fetch('/api/comments/' + movieId)
+                .then(res => res.json())
+                .then(comments => {
+                    const list = document.getElementById('commentsList');
+                    list.innerHTML = '';
+                    if (comments.length === 0) {
+                        list.innerHTML = '<p style="color:#6b7280; font-size:0.85rem;">لا توجد تعليقات بعد، كن أول من يعلق!</p>';
+                        return;
+                    }
+                    comments.forEach(c => {
+                        const div = document.createElement('div');
+                        div.className = 'comment-item';
+                        div.innerHTML = `<strong>${c.user_name}</strong><p>${c.comment_text}</p>`;
+                        list.appendChild(div);
+                    });
+                });
+        }
+
+        function submitComment(e) {
+            e.preventDefault();
+            if (!currentMovieId) return;
+            const name = document.getElementById('commentUser').value;
+            const text = document.getElementById('commentText').value;
+
+            fetch('/api/comments/' + currentMovieId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_name: name, comment_text: text })
+            }).then(() => {
+                document.getElementById('commentText').value = '';
+                loadComments(currentMovieId);
+            });
         }
     </script>
 
@@ -348,20 +481,24 @@ ADMIN_TEMPLATE = """
 
         <h3>إضافة مسلسل أو فيلم جديد</h3>
         <form method="POST" action="/admin/add">
-            <input type="text" name="title" placeholder="عنوان المسلسل" required>
+            <input type="text" name="title" placeholder="عنوان المسلسل أو الفيلم" required>
             <div class="row">
                 <select name="type">
-                    <option value="مسلسل">مسلسل</option>
                     <option value="فيلم">فيلم</option>
+                    <option value="مسلسل">مسلسل</option>
                 </select>
                 <input type="text" name="year" placeholder="السنة" value="2026">
+                <input type="text" name="rating" placeholder="التقييم (مثال: ⭐ 8.5/10 IMDb)" value="⭐ 8.5/10">
             </div>
             <input type="text" name="poster" placeholder="رابط صورة البوستر (URL)" required>
             
-            <span class="hint">💡 افصل بين سيرفرات الحلقة الأولى بفاصلة ( , )</span>
-            <input type="text" name="embed_urls" placeholder="روابط Embed للحلقة الأولى" required>
+            <span class="hint">💡 افصل بين سيرفرات المشاهدة بفاصلة ( , )</span>
+            <input type="text" name="embed_urls" placeholder="روابط Embed للمشاهدة" required>
             
-            <textarea name="description" placeholder="وصف المسلسل" rows="2"></textarea>
+            <span class="hint">📥 رابط التحميل المباشر (Download link):</span>
+            <input type="text" name="download_url" placeholder="رابط التحميل (مثال: https://playmogo.com/dl/...)">
+
+            <textarea name="description" placeholder="وصف العمل" rows="2"></textarea>
             <button type="submit" style="width:100%;">إنشاء السلسلة وحفظها دائمة</button>
         </form>
 
@@ -371,7 +508,7 @@ ADMIN_TEMPLATE = """
         {% for movie in movies %}
         <div class="work-box">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h4>{{ movie.title }} <span style="font-size:0.8rem; color:#10b981;">({{ movie.type }})</span></h4>
+                <h4>{{ movie.title }} <span style="font-size:0.8rem; color:#10b981;">({{ movie.type }}) - {{ movie.rating }}</span></h4>
                 <div style="display:flex; gap:6px;">
                     <button type="button" class="btn-warning" onclick="toggleEdit('edit-{{ movie.id }}')">تعديل</button>
                     <form method="POST" action="/admin/delete/{{ movie.id }}" style="margin:0;">
@@ -386,6 +523,7 @@ ADMIN_TEMPLATE = """
                     <input type="text" name="title" value="{{ movie.title }}" required>
                     <div class="row">
                         <input type="text" name="year" value="{{ movie.year }}">
+                        <input type="text" name="rating" value="{{ movie.rating }}">
                         <input type="text" name="poster" value="{{ movie.poster }}" required>
                     </div>
                     <textarea name="description" rows="2">{{ movie.description }}</textarea>
@@ -394,12 +532,13 @@ ADMIN_TEMPLATE = """
             </div>
 
             <div style="margin-top: 15px;">
-                <strong style="font-size: 0.85rem; color: #9ca3af;">الحلقات المحفوظة:</strong>
+                <strong style="font-size: 0.85rem; color: #9ca3af;">الحلقات والعروض المحفوظة:</strong>
                 {% for ep in movie.episodes %}
                 <div class="ep-item">
                     <span>
                         <strong>الحلقة {{ ep.ep_number }}</strong> — 
                         <small style="color: #f59e0b;">سيرفرات: {{ ep.servers | length }}</small>
+                        {% if ep.download_url %}<small style="color:#10b981;"> | يتوفر تحميل ✅</small>{% endif %}
                     </span>
                     <form method="POST" action="/admin/delete_ep/{{ ep.id }}" style="margin:0;">
                         <button type="submit" style="background:#ef4444; color:#fff; padding:3px 8px; font-size:0.75rem;">حذف</button>
@@ -413,9 +552,10 @@ ADMIN_TEMPLATE = """
                 <strong style="color: #10b981; font-size: 0.85rem;">+ إضافة حلقة جديدة:</strong>
                 <form method="POST" action="/admin/add_episode/{{ movie.id }}" style="margin-top: 8px;">
                     <div class="row">
-                        <input type="number" name="ep_number" placeholder="رقم الحلقة" required style="width: 25%;">
-                        <input type="text" name="embed_urls" placeholder="روابط السيرفرات (مفصولة بفاصلة ,)" required>
+                        <input type="number" name="ep_number" placeholder="رقم الحلقة" required style="width: 20%;">
+                        <input type="text" name="embed_urls" placeholder="روابط المشاهدة (مفصولة بفاصلة ,)" required>
                     </div>
+                    <input type="text" name="download_url" placeholder="رابط التحميل لهذه الحلقة">
                     <button type="submit" class="btn-add-ep">إضافة الحلقة</button>
                 </form>
             </div>
@@ -461,7 +601,8 @@ def fetch_all_movies(movie_type=None):
                 episodes.append({
                     "id": ep['id'],
                     "ep_number": ep['ep_number'],
-                    "servers": [s.strip() for s in ep['servers'].split(',') if s.strip()]
+                    "servers": [s.strip() for s in ep['servers'].split(',') if s.strip()],
+                    "download_url": ep.get('download_url', '')
                 })
             m['episodes'] = episodes
             result.append(m)
@@ -494,14 +635,15 @@ def admin_add():
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "INSERT INTO movies (title, type, year, poster, description) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-            (request.form.get('title'), request.form.get('type'), request.form.get('year'), request.form.get('poster'), request.form.get('description'))
+            "INSERT INTO movies (title, type, year, poster, description, rating) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+            (request.form.get('title'), request.form.get('type'), request.form.get('year'), request.form.get('poster'), request.form.get('description'), request.form.get('rating', '⭐ 8.0/10'))
         )
         movie_id = cursor.fetchone()['id']
         urls = request.form.get('embed_urls')
+        dl_url = request.form.get('download_url')
         cursor.execute(
-            "INSERT INTO episodes (movie_id, ep_number, servers) VALUES (%s, %s, %s)",
-            (movie_id, 1, urls)
+            "INSERT INTO episodes (movie_id, ep_number, servers, download_url) VALUES (%s, %s, %s, %s)",
+            (movie_id, 1, urls, dl_url)
         )
         db.commit()
         cursor.close()
@@ -513,8 +655,8 @@ def edit_movie(movie_id):
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "UPDATE movies SET title = %s, year = %s, poster = %s, description = %s WHERE id = %s",
-            (request.form.get('title'), request.form.get('year'), request.form.get('poster'), request.form.get('description'), movie_id)
+            "UPDATE movies SET title = %s, year = %s, poster = %s, description = %s, rating = %s WHERE id = %s",
+            (request.form.get('title'), request.form.get('year'), request.form.get('poster'), request.form.get('description'), request.form.get('rating'), movie_id)
         )
         db.commit()
         cursor.close()
@@ -527,9 +669,10 @@ def add_episode(movie_id):
         cursor = db.cursor()
         ep_num = request.form.get('ep_number')
         urls = request.form.get('embed_urls')
+        dl_url = request.form.get('download_url')
         
         cursor.execute("DELETE FROM episodes WHERE movie_id = %s AND ep_number = %s", (movie_id, ep_num))
-        cursor.execute("INSERT INTO episodes (movie_id, ep_number, servers) VALUES (%s, %s, %s)", (movie_id, ep_num, urls))
+        cursor.execute("INSERT INTO episodes (movie_id, ep_number, servers, download_url) VALUES (%s, %s, %s, %s)", (movie_id, ep_num, urls, dl_url))
         db.commit()
         cursor.close()
     return redirect('/admin')
@@ -549,11 +692,46 @@ def delete_movie(movie_id):
     if session.get('logged_in'):
         db = get_db()
         cursor = db.cursor()
+        cursor.execute("DELETE FROM comments WHERE movie_id = %s", (movie_id,))
         cursor.execute("DELETE FROM episodes WHERE movie_id = %s", (movie_id,))
         cursor.execute("DELETE FROM movies WHERE id = %s", (movie_id,))
         db.commit()
         cursor.close()
     return redirect('/admin')
+
+# --- API اللايكات والتعليقات ---
+@app.route('/api/like/<int:movie_id>', methods=['POST'])
+def like_movie(movie_id):
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("UPDATE movies SET likes_count = likes_count + 1 WHERE id = %s RETURNING likes_count", (movie_id,))
+    updated = cursor.fetchone()
+    db.commit()
+    cursor.close()
+    return jsonify({"likes": updated['likes_count'] if updated else 0})
+
+@app.route('/api/comments/<int:movie_id>', methods=['GET'])
+def get_comments(movie_id):
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("SELECT user_name, comment_text FROM comments WHERE movie_id = %s ORDER BY id DESC", (movie_id,))
+    comments = cursor.fetchall()
+    cursor.close()
+    return jsonify(list(comments))
+
+@app.route('/api/comments/<int:movie_id>', methods=['POST'])
+def add_comment(movie_id):
+    data = request.json
+    if data and data.get('user_name') and data.get('comment_text'):
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            "INSERT INTO comments (movie_id, user_name, comment_text) VALUES (%s, %s, %s)",
+            (movie_id, data['user_name'], data['comment_text'])
+        )
+        db.commit()
+        cursor.close()
+    return jsonify({"status": "ok"})
 
 @app.route('/admin/logout')
 def admin_logout():
