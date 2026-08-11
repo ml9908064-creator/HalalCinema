@@ -1,38 +1,3 @@
-
-الان كيف الوضع ؟\
-
-تمام 👍 الوضع عندي الآن طبيعي، وأنا جاهز نكمل من حيث توقفنا.
-
-إذا كنت تقصد تعديل صور السيارات بالمواصفات التي اتفقنا عليها، أرسل الصور وأنا أبدأ عليها مباشرة.
-
-
-اريدك ان ضيف لي هذا الكود في المكان المخصص له في البرومات , برسل لك الكود وبعده برسالك البرومات
-
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3392468179606260"
-     crossorigin="anonymous"></script> 
-
-
-أكيد. أرسل لي البرومات بعد الكود، وسأضع كود Google AdSense في المكان المخصص له داخل البرومات بدون تغيير أو حذف أي شيء آخر.
-
-وسأحافظ على الكود كما أرسلته، مع تصحيح تنسيقه فقط إذا كان ذلك ضروريًا.
-
-
-
-Pasted text.txt
-Document
-
-تم ✅ أضفت كود Google AdSense في المكان المناسب داخل <head> في القالب الرئيسي، مع الحفاظ على باقي الكود كما هو. 
-
-
- 
-
-
-
-Library
-/
-Pasted_text_with_adsense.txt
-
-
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -209,7 +174,6 @@ HTML_TEMPLATE = """
         .ep-btn { background: #2d3446; color: #fff; border: 1px solid #10b981; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.9rem; }
         .ep-btn:hover, .ep-btn.active { background: #10b981; color: #000; }
 
-        /* قسم التعليقات */
         .comments-section { margin-top: 25px; border-top: 1px solid #1f2430; padding-top: 20px; }
         .comments-section h3 { color: #10b981; font-size: 1.1rem; margin-bottom: 12px; }
         .comment-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
@@ -308,7 +272,6 @@ HTML_TEMPLATE = """
                     <div class="episodes-bar" id="episodesList"></div>
                 </div>
 
-                <!-- قسم التعليقات -->
                 <div class="comments-section">
                     <h3><i class="fa-solid fa-comments"></i> تعليقات الزوار:</h3>
                     
@@ -618,6 +581,7 @@ ADMIN_TEMPLATE = """
 </html>
 """
 
+# --- دوال المساعدة للتعامل مع قاعدة البيانات ---
 def fetch_all_movies(movie_type=None):
     try:
         db = get_db()
@@ -650,13 +614,14 @@ def fetch_all_movies(movie_type=None):
         print("Fetch Error:", e)
         return []
 
+# --- مسارات التطبيق (Routes) ---
+
 @app.route('/')
 def home():
     m_type = request.args.get('type')
     movies = fetch_all_movies(m_type)
     return render_template_string(HTML_TEMPLATE, movies=movies)
 
-# --- مسار خريطة الموقع (Sitemap.xml) ---
 @app.route('/sitemap.xml', methods=['GET'])
 def sitemap():
     try:
@@ -669,21 +634,18 @@ def sitemap():
         xml = ['<?xml version="1.0" encoding="UTF-8"?>']
         xml.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
         
-        # الصفحة الرئيسية
         xml.append('  <url>')
         xml.append('    <loc>https://halal-cinema.vercel.app/</loc>')
         xml.append('    <changefreq>daily</changefreq>')
         xml.append('    <priority>1.0</priority>')
         xml.append('  </url>')
 
-        # قسم الأفلام
         xml.append('  <url>')
         xml.append('    <loc>https://halal-cinema.vercel.app/?type=%D9%81%D9%8A%D9%84%D9%85</loc>')
         xml.append('    <changefreq>daily</changefreq>')
         xml.append('    <priority>0.8</priority>')
         xml.append('  </url>')
 
-        # قسم المسلسلات
         xml.append('  <url>')
         xml.append('    <loc>https://halal-cinema.vercel.app/?type=%D9%85%D8%B3%D9%84%D8%B3%D9%84</loc>')
         xml.append('    <changefreq>daily</changefreq>')
@@ -699,894 +661,156 @@ def sitemap():
 
 @app.route('/admin')
 def admin():
-    movies = fetch_all_movies() if session.get('logged_in') else []
-    return render_template_string(ADMIN_TEMPLATE, logged_in=session.get('logged_in'), movies=movies)
+    logged_in = session.get('admin_logged_in', False)
+    movies = fetch_all_movies() if logged_in else []
+    return render_template_string(ADMIN_TEMPLATE, logged_in=logged_in, movies=movies)
 
 @app.route('/admin/login', methods=['POST'])
 def admin_login():
-    if request.form.get('password') == ADMIN_PASSWORD:
-        session['logged_in'] = True
+    pwd = request.form.get('password')
+    if pwd == ADMIN_PASSWORD:
+        session['admin_logged_in'] = True
     return redirect('/admin')
 
 @app.route('/admin/logout')
 def admin_logout():
-    session.pop('logged_in', None)
+    session.pop('admin_logged_in', None)
     return redirect('/admin')
 
 @app.route('/admin/add', methods=['POST'])
 def admin_add():
-    if session.get('logged_in'):
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute(
-            "INSERT INTO movies (title, type, year, poster, description, rating) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-            (request.form.get('title'), request.form.get('type'), request.form.get('year'), request.form.get('poster'), request.form.get('description'), request.form.get('rating', '⭐ 8.0/10'))
-        )
-        movie_id = cursor.fetchone()['id']
-        urls = request.form.get('embed_urls')
-        dl_url = request.form.get('download_url')
-        cursor.execute(
-            "INSERT INTO episodes (movie_id, ep_number, servers, download_url) VALUES (%s, %s, %s, %s)",
-            (movie_id, 1, urls, dl_url)
-        )
-        db.commit()
-        cursor.close()
+    if not session.get('admin_logged_in'):
+        return redirect('/admin')
+    
+    title = request.form.get('title')
+    type_ = request.form.get('type')
+    year = request.form.get('year')
+    rating = request.form.get('rating')
+    poster = request.form.get('poster')
+    embed_urls = request.form.get('embed_urls')
+    download_url = request.form.get('download_url')
+    description = request.form.get('description')
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        INSERT INTO movies (title, type, year, rating, poster, description)
+        VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;
+    ''', (title, type_, year, rating, poster, description))
+    movie_id = cursor.fetchone()['id']
+
+    cursor.execute('''
+        INSERT INTO episodes (movie_id, ep_number, servers, download_url)
+        VALUES (%s, %s, %s, %s);
+    ''', (movie_id, 1, embed_urls, download_url))
+
+    db.commit()
+    cursor.close()
     return redirect('/admin')
 
 @app.route('/admin/edit/<int:movie_id>', methods=['POST'])
-def edit_movie(movie_id):
-    if session.get('logged_in'):
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute(
-            "UPDATE movies SET title = %s, year = %s, poster = %s, description = %s, rating = %s WHERE id = %s",
-            (request.form.get('title'), request.form.get('year'), request.form.get('poster'), request.form.get('description'), request.form.get('rating'), movie_id)
-        )
-        db.commit()
-        cursor.close()
-    return redirect('/admin')
+def admin_edit(movie_id):
+    if not session.get('admin_logged_in'):
+        return redirect('/admin')
 
-@app.route('/admin/delete/<int:movie_id>', methods=['POST'])
-def delete_movie(movie_id):
-    if session.get('logged_in'):
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute("DELETE FROM movies WHERE id = %s", (movie_id,))
-        db.commit()
-        cursor.close()
+    title = request.form.get('title')
+    year = request.form.get('year')
+    rating = request.form.get('rating')
+    poster = request.form.get('poster')
+    description = request.form.get('description')
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        UPDATE movies
+        SET title=%s, year=%s, rating=%s, poster=%s, description=%s
+        WHERE id=%s;
+    ''', (title, year, rating, poster, description, movie_id))
+
+    db.commit()
+    cursor.close()
     return redirect('/admin')
 
 @app.route('/admin/add_episode/<int:movie_id>', methods=['POST'])
-def add_episode(movie_id):
-    if session.get('logged_in'):
-        db = get_db()
-        cursor = db.cursor()
-        ep_num = request.form.get('ep_number')
-        urls = request.form.get('embed_urls')
-        dl_url = request.form.get('download_url')
-        
-        cursor.execute("DELETE FROM episodes WHERE movie_id = %s AND ep_number = %s", (movie_id, ep_num))
-        cursor.execute("INSERT INTO episodes (movie_id, ep_number, servers, download_url) VALUES (%s, %s, %s, %s)", (movie_id, ep_num, urls, dl_url))
-        db.commit()
-        cursor.close()
-    return redirect('/admin')
+def admin_add_episode(movie_id):
+    if not session.get('admin_logged_in'):
+        return redirect('/admin')
 
-@app.route('/admin/delete_ep/<int:ep_id>', methods=['POST'])
-def delete_ep(ep_id):
-    if session.get('logged_in'):
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute("DELETE FROM episodes WHERE id = %s", (ep_id,))
-        db.commit()
-        cursor.close()
-    return redirect('/admin')
+    ep_number = request.form.get('ep_number')
+    embed_urls = request.form.get('embed_urls')
+    download_url = request.form.get('download_url')
 
-@app.route('/api/like/<int:movie_id>', methods=['POST'])
-def add_like(movie_id):
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("UPDATE movies SET likes_count = likes_count + 1 WHERE id = %s RETURNING likes_count", (movie_id,))
-    new_likes = cursor.fetchone()['likes_count']
+    cursor.execute('''
+        INSERT INTO episodes (movie_id, ep_number, servers, download_url)
+        VALUES (%s, %s, %s, %s);
+    ''', (movie_id, ep_number, embed_urls, download_url))
+
     db.commit()
     cursor.close()
-    return jsonify({'likes': new_likes})
-
-@app.route('/api/comments/<int:movie_id>', methods=['GET', 'POST'])
-def handle_comments(movie_id):
-    db = get_db()
-    cursor = db.cursor()
-    if request.method == 'POST':
-        data = request.get_json()
-        cursor.execute(
-            "INSERT INTO comments (movie_id, user_name, comment_text) VALUES (%s, %s, %s)",
-            (movie_id, data.get('user_name'), data.get('comment_text'))
-        )
-        db.commit()
-        cursor.close()
-        return jsonify({'status': 'success'})
-    else:
-        cursor.execute("SELECT user_name, comment_text, created_at FROM comments WHERE movie_id = %s ORDER BY id DESC", (movie_id,))
-        comments = cursor.fetchall()
-        cursor.close()
-        return jsonify(comments)
-Library
-/
-Pasted_text_with_adsense.txt
-
-
-import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from flask import Flask, render_template_string, request, redirect, session, g, jsonify, Response
-
-app = Flask(__name__)
-
-# --- إعدادات الأمان وقاعدة البيانات ---
-app.secret_key = 'halal_cinema_ultra_secure_key_2026_x89f'
-ADMIN_PASSWORD = "Halal#CinemaSecured2026!"
-
-DATABASE_URL = os.environ.get('DATABASE_URL')
-
-# --- إدارة الاتصال بقاعدة البيانات ---
-def get_db():
-    if 'db' not in g:
-        if not DATABASE_URL:
-            raise ValueError("DATABASE_URL is missing in Environment Variables")
-        g.db = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-    return g.db
-
-@app.teardown_appcontext
-def close_connection(exception):
-    db = g.pop('db', None)
-    if db is not None:
-        db.close()
-
-# --- إنشاء وتحديث جداول قاعدة البيانات السحابية ---
-def init_db():
-    try:
-        if DATABASE_URL:
-            db = psycopg2.connect(DATABASE_URL)
-            cursor = db.cursor()
-            
-            # جدول الأفلام والمسلسلات
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS movies (
-                    id SERIAL PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    type TEXT NOT NULL,
-                    year TEXT,
-                    poster TEXT NOT NULL,
-                    description TEXT,
-                    rating TEXT DEFAULT '⭐ 8.0/10',
-                    likes_count INTEGER DEFAULT 0
-                );
-            ''')
-            
-            # التأكد من وجود أعمدة التقييم واللايكات
-            cursor.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS rating TEXT DEFAULT '⭐ 8.0/10';")
-            cursor.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS likes_count INTEGER DEFAULT 0;")
-
-            # جدول الحلقات والسيرفرات
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS episodes (
-                    id SERIAL PRIMARY KEY,
-                    movie_id INTEGER REFERENCES movies(id) ON DELETE CASCADE,
-                    ep_number INTEGER NOT NULL,
-                    servers TEXT NOT NULL,
-                    download_url TEXT
-                );
-            ''')
-            cursor.execute("ALTER TABLE episodes ADD COLUMN IF NOT EXISTS download_url TEXT;")
-
-            # جدول التعليقات
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS comments (
-                    id SERIAL PRIMARY KEY,
-                    movie_id INTEGER REFERENCES movies(id) ON DELETE CASCADE,
-                    user_name TEXT NOT NULL,
-                    comment_text TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            ''')
-
-            db.commit()
-            cursor.close()
-            db.close()
-    except Exception as e:
-        print("Database Init Error:", e)
-
-init_db()
-
-# --- القوالب وتصميم الواجهات ---
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3392468179606260"
-            crossorigin="anonymous"></script>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="google-site-verification" content="5wjEorvbR_yiK2Dv0c70ZPqbSNhJ7L9lRBTPnURqB8Q" />
-    <title>HalalCinema - حلال سينما</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', sans-serif; }
-        body { background-color: #0b0c10; color: #ffffff; min-height: 100vh; display: flex; flex-direction: column; }
-        
-        header {
-            background: #12141c;
-            border-bottom: 2px solid #1f2430;
-            padding: 12px 4%;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-        }
-        .logo-text { font-size: 1.8rem; font-weight: 900; color: #10b981; }
-        .nav-menu { display: flex; list-style: none; gap: 20px; align-items: center; }
-        .nav-link { color: #e5e7eb; text-decoration: none; font-weight: 700; font-size: 0.95rem; }
-        .nav-link:hover { color: #10b981; }
-        .admin-btn { background: #10b981; color: #000; font-weight: 800; padding: 6px 14px; border-radius: 6px; text-decoration: none; font-size: 0.85rem; }
-
-        .welcome-hero {
-            background: linear-gradient(135deg, #12141c 0%, #1a2332 100%);
-            border: 1px solid #10b981;
-            border-radius: 12px;
-            padding: 25px;
-            margin: 20px auto;
-            text-align: center;
-            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1);
-        }
-        .welcome-hero h1 { color: #10b981; font-size: 1.8rem; margin-bottom: 10px; font-weight: 900; }
-        .welcome-hero p { color: #d1d5db; font-size: 1rem; max-width: 800px; margin: 0 auto; line-height: 1.7; }
-        .badge-halal { background: #10b981; color: #000; padding: 3px 10px; border-radius: 20px; font-weight: bold; font-size: 0.8rem; display: inline-block; margin-bottom: 8px; }
-
-        .main-container { max-width: 1200px; width: 92%; margin: 10px auto; flex: 1; }
-
-        .player-box {
-            display: none;
-            background: #12141c;
-            border-radius: 12px;
-            border: 2px solid #10b981;
-            overflow: hidden;
-            margin-bottom: 30px;
-        }
-        .iframe-container { position: relative; padding-bottom: 56.25%; height: 0; background: #000; }
-        .iframe-container iframe { position: absolute; top:0; left:0; width:100%; height:100%; border:0; }
-        .player-info { padding: 20px; }
-        
-        .movie-title-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
-        .movie-title-row h2 { color: #10b981; font-weight: 800; font-size: 1.5rem; }
-        
-        .meta-badges { display: flex; gap: 10px; align-items: center; }
-        .rating-badge { background: #f59e0b; color: #000; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 0.85rem; }
-        .like-btn { background: #1f2937; color: #ef4444; border: 1px solid #ef4444; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-weight: 800; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; transition: 0.2s; }
-        .like-btn:hover { background: #ef4444; color: #fff; }
-
-        .action-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin: 15px 0; background: #111827; padding: 12px; border-radius: 8px; border: 1px solid #1f2430; }
-        .servers-bar { display: flex; gap: 8px; flex-wrap: wrap; }
-        .server-btn { background: #374151; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.85rem; }
-        .server-btn:hover, .server-btn.active { background: #f59e0b; color: #000; }
-
-        .download-btn {
-            background: #10b981;
-            color: #000;
-            text-decoration: none;
-            padding: 8px 18px;
-            border-radius: 6px;
-            font-weight: 800;
-            font-size: 0.9rem;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: 0.2s;
-        }
-        .download-btn:hover { background: #34d399; }
-
-        .episodes-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; background: #1a1d28; padding: 15px; border-radius: 8px; }
-        .ep-btn { background: #2d3446; color: #fff; border: 1px solid #10b981; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.9rem; }
-        .ep-btn:hover, .ep-btn.active { background: #10b981; color: #000; }
-
-        /* قسم التعليقات */
-        .comments-section { margin-top: 25px; border-top: 1px solid #1f2430; padding-top: 20px; }
-        .comments-section h3 { color: #10b981; font-size: 1.1rem; margin-bottom: 12px; }
-        .comment-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
-        .comment-form input, .comment-form textarea { background: #1a1d28; border: 1px solid #2d3446; color: #fff; padding: 10px; border-radius: 6px; font-size: 0.9rem; }
-        .comment-form button { background: #10b981; color: #000; font-weight: 800; border: none; padding: 10px; border-radius: 6px; cursor: pointer; }
-        .comments-list { display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; }
-        .comment-item { background: #1a1d28; padding: 10px 14px; border-radius: 8px; border-right: 3px solid #10b981; }
-        .comment-item strong { color: #f59e0b; font-size: 0.85rem; }
-        .comment-item p { color: #d1d5db; font-size: 0.88rem; margin-top: 4px; }
-
-        .grid-header { border-right: 4px solid #10b981; padding-right: 12px; margin-bottom: 20px; }
-        .movies-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 18px; }
-
-        .movie-card {
-            background: #12141c;
-            border-radius: 10px;
-            overflow: hidden;
-            cursor: pointer;
-            border: 1px solid #1f2430;
-            transition: transform 0.25s ease;
-            position: relative;
-        }
-        .movie-card:hover { transform: translateY(-6px); border-color: #10b981; }
-        .poster-wrapper { position: relative; width: 100%; height: 270px; }
-        .poster-wrapper img { width: 100%; height: 100%; object-fit: cover; }
-        .card-rating-badge { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: #f59e0b; padding: 3px 8px; border-radius: 5px; font-size: 0.75rem; font-weight: 800; border: 1px solid #f59e0b; }
-        .card-overlay { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, #0b0c10, transparent); padding: 15px 10px; text-align: center; }
-        .movie-name { font-size: 0.9rem; font-weight: 700; }
-
-        footer {
-            background: #12141c;
-            border-top: 2px solid #1f2430;
-            padding: 30px 4% 15px;
-            margin-top: 50px;
-            text-align: center;
-        }
-        .footer-links { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-bottom: 15px; }
-        .footer-links a { color: #9ca3af; text-decoration: none; font-size: 0.85rem; font-weight: 600; }
-        .footer-links a:hover { color: #10b981; }
-        .footer-copy { color: #6b7280; font-size: 0.8rem; margin-top: 10px; }
-    </style>
-</head>
-<body>
-
-    <header>
-        <a href="/" style="text-decoration:none;"><span class="logo-text">HALAL CINEMA</span></a>
-        <ul class="nav-menu">
-            <li><a href="/" class="nav-link">الرئيسية</a></li>
-            <li><a href="/?type=فيلم" class="nav-link">الأفلام</a></li>
-            <li><a href="/?type=مسلسل" class="nav-link">المسلسلات</a></li>
-        </ul>
-        <a href="/admin" class="admin-btn"><i class="fa-solid fa-lock"></i> لوحة التحكم</a>
-    </header>
-
-    <div class="main-container">
-
-        <div class="welcome-hero">
-            <span class="badge-halal"><i class="fa-solid fa-shield-halal"></i> سينما آمنة ونظيفة</span>
-            <h1>مرحباً بكم في منصة حلال سينما</h1>
-            <p>
-                نحن نمكنكم من مشاهدة ممتعة ومحتوى عائلي آمن. جميع الأفلام والمسلسلات المتاحة تم مراجعتها وتعديلها وتقطيع المشاهد واللقطات التي لا تتناسب مع قيمنا وثقافتنا الإسلامية وعاداتنا العربية، لنقدم لكم الفن بأسلوب نقي وراقي.
-            </p>
-        </div>
-
-        <div class="player-box" id="playerWindow">
-            <div class="iframe-container">
-                <iframe id="videoIframe" src="" allowfullscreen></iframe>
-            </div>
-            <div class="player-info">
-                
-                <div class="movie-title-row">
-                    <h2 id="videoTitle"></h2>
-                    <div class="meta-badges">
-                        <span class="rating-badge" id="videoRating">⭐ --</span>
-                        <button class="like-btn" id="likeBtn" onclick="addLike()">
-                            <i class="fa-solid fa-heart"></i> <span id="likeCount">0</span>
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="action-bar" id="serversSection">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <span style="color:#f59e0b; font-weight:bold; font-size:0.9rem;"><i class="fa-solid fa-server"></i> اختر السيرفر:</span>
-                        <div class="servers-bar" id="serversList"></div>
-                    </div>
-
-                    <a href="#" id="downloadLinkBtn" target="_blank" class="download-btn" style="display:none;">
-                        <i class="fa-solid fa-download"></i> تحميل الفيلم
-                    </a>
-                </div>
-
-                <p id="videoDesc" style="color: #9ca3af; font-size: 0.9rem; margin-top:10px;"></p>
-                
-                <div id="episodesSection" style="display:none; margin-top: 15px;">
-                    <h4 style="color:#10b981; margin-bottom:10px;">قائمة الحلقات:</h4>
-                    <div class="episodes-bar" id="episodesList"></div>
-                </div>
-
-                <!-- قسم التعليقات -->
-                <div class="comments-section">
-                    <h3><i class="fa-solid fa-comments"></i> تعليقات الزوار:</h3>
-                    
-                    <form class="comment-form" onsubmit="submitComment(event)">
-                        <input type="text" id="commentUser" placeholder="اسمك الكريم..." required>
-                        <textarea id="commentText" placeholder="اكتب رأيك في الفيلم/المسلسل..." rows="2" required></textarea>
-                        <button type="submit">إضافة التعليق</button>
-                    </form>
-
-                    <div class="comments-list" id="commentsList"></div>
-                </div>
-
-            </div>
-        </div>
-
-        <div class="grid-header">
-            <h3>قائمة العروض والمسلسلات المتاحة</h3>
-        </div>
-
-        <div class="movies-grid">
-            {% for movie in movies %}
-            <div class="movie-card" onclick='playMovie({{ movie | tojson }})'>
-                <div class="poster-wrapper">
-                    <img src="{{ movie.poster }}" alt="{{ movie.title }}">
-                    <div class="card-rating-badge">{{ movie.rating }}</div>
-                    <div class="card-overlay">
-                        <div class="movie-name">{{ movie.title }}</div>
-                        <span style="font-size:0.75rem; color:#10b981; font-weight:bold;"><i class="fa-solid fa-play"></i> مشاهدة العرض</span>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-
-    </div>
-
-    <footer>
-        <div class="footer-links">
-            <a href="#">سياسة الخصوصية</a>
-            <a href="#">شروط الاستخدام</a>
-            <a href="#">إخلاء المسؤولية</a>
-            <a href="#">اتصل بنا</a>
-        </div>
-        <p class="footer-copy">جميع الحقوق محفوظة © 2026 لموقع حلال سينما - سينما آمنة ونظيفة للجميع</p>
-    </footer>
-
-    <script>
-        let currentMovieId = null;
-
-        function playMovie(movie) {
-            currentMovieId = movie.id;
-            document.getElementById('playerWindow').style.display = 'block';
-            document.getElementById('videoTitle').innerText = movie.title;
-            document.getElementById('videoDesc').innerText = movie.description;
-            document.getElementById('videoRating').innerText = movie.rating || '⭐ 8.0/10';
-            document.getElementById('likeCount').innerText = movie.likes_count || 0;
-
-            loadComments(movie.id);
-
-            const epSection = document.getElementById('episodesSection');
-            const epList = document.getElementById('episodesList');
-            epList.innerHTML = '';
-
-            if (movie.episodes && movie.episodes.length > 0) {
-                loadEpisodeServers(movie.episodes[0]);
-
-                if (movie.type === 'مسلسل') {
-                    epSection.style.display = 'block';
-                    movie.episodes.forEach((ep, index) => {
-                        const btn = document.createElement('button');
-                        btn.className = 'ep-btn' + (index === 0 ? ' active' : '');
-                        btn.innerText = 'الحلقة ' + ep.ep_number;
-                        btn.onclick = function() {
-                            document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
-                            btn.classList.add('active');
-                            loadEpisodeServers(ep);
-                        };
-                        epList.appendChild(btn);
-                    });
-                } else {
-                    epSection.style.display = 'none';
-                }
-            }
-            window.scrollTo({ top: 100, behavior: 'smooth' });
-        }
-
-        function loadEpisodeServers(ep) {
-            const serversList = document.getElementById('serversList');
-            const downloadBtn = document.getElementById('downloadLinkBtn');
-            serversList.innerHTML = '';
-            let servers = ep.servers || [];
-
-            if (servers.length > 0) {
-                document.getElementById('videoIframe').src = servers[0];
-
-                servers.forEach((url, i) => {
-                    const sBtn = document.createElement('button');
-                    sBtn.className = 'server-btn' + (i === 0 ? ' active' : '');
-                    sBtn.innerText = 'سيرفر ' + (i + 1);
-                    sBtn.onclick = function() {
-                        document.querySelectorAll('.server-btn').forEach(sb => sb.classList.remove('active'));
-                        sBtn.classList.add('active');
-                        document.getElementById('videoIframe').src = url;
-                    };
-                    serversList.appendChild(sBtn);
-                });
-            }
-
-            if (ep.download_url && ep.download_url.trim() !== '') {
-                downloadBtn.href = ep.download_url;
-                downloadBtn.style.display = 'inline-flex';
-            } else {
-                downloadBtn.style.display = 'none';
-            }
-        }
-
-        function addLike() {
-            if (!currentMovieId) return;
-            fetch('/api/like/' + currentMovieId, { method: 'POST' })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.likes !== undefined) {
-                        document.getElementById('likeCount').innerText = data.likes;
-                    }
-                });
-        }
-
-        function loadComments(movieId) {
-            fetch('/api/comments/' + movieId)
-                .then(res => res.json())
-                .then(comments => {
-                    const list = document.getElementById('commentsList');
-                    list.innerHTML = '';
-                    if (comments.length === 0) {
-                        list.innerHTML = '<p style="color:#6b7280; font-size:0.85rem;">لا توجد تعليقات بعد، كن أول من يعلق!</p>';
-                        return;
-                    }
-                    comments.forEach(c => {
-                        const div = document.createElement('div');
-                        div.className = 'comment-item';
-                        div.innerHTML = `<strong>${c.user_name}</strong><p>${c.comment_text}</p>`;
-                        list.appendChild(div);
-                    });
-                });
-        }
-
-        function submitComment(e) {
-            e.preventDefault();
-            if (!currentMovieId) return;
-            const name = document.getElementById('commentUser').value;
-            const text = document.getElementById('commentText').value;
-
-            fetch('/api/comments/' + currentMovieId, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_name: name, comment_text: text })
-            }).then(() => {
-                document.getElementById('commentText').value = '';
-                loadComments(currentMovieId);
-            });
-        }
-    </script>
-
-</body>
-</html>
-"""
-
-ADMIN_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <title>لوحة التحكم المحمية - حلال سينما</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800&display=swap" rel="stylesheet">
-    <style>
-        body { background: #0b0c10; color: #fff; font-family: 'Cairo', sans-serif; padding: 30px 15px; }
-        .admin-card { max-width: 850px; margin: 0 auto; background: #12141c; padding: 25px; border-radius: 12px; border: 1px solid #10b981; }
-        h2, h3 { color: #10b981; text-align: center; margin-bottom: 20px; }
-        input, select, textarea { width: 100%; padding: 10px; margin-bottom: 10px; background: #1a1d28; border: 1px solid #2d3446; color: #fff; border-radius: 6px; box-sizing: border-box; }
-        .row { display: flex; gap: 10px; }
-        button { padding: 10px; background: #10b981; border: none; font-weight: 800; border-radius: 6px; cursor: pointer; color: #000; margin-top: 5px; }
-        .btn-danger { background: #ef4444; color: #fff; }
-        .btn-warning { background: #f59e0b; color: #000; }
-        .btn-add-ep { background: #3b82f6; color: #fff; width: 100%; }
-        .work-box { background: #1a1d28; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-right: 4px solid #10b981; }
-        .ep-item { background: #12141c; padding: 8px 12px; border-radius: 6px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
-        .edit-form { background: #111827; padding: 12px; border-radius: 8px; margin-top: 10px; display: none; border: 1px dashed #f59e0b; }
-        .back-link { display: block; text-align: center; margin-top: 15px; color: #9ca3af; text-decoration: none; }
-        .hint { color: #f59e0b; font-size: 0.75rem; margin-bottom: 8px; display: block; }
-        .security-badge { background: #10b98122; border: 1px solid #10b981; color: #10b981; padding: 8px; border-radius: 6px; text-align: center; font-size: 0.85rem; margin-bottom: 20px; }
-    </style>
-</head>
-<body>
-
-    <div class="admin-card">
-        <h2>لوحة التحكم المحمية - حلال سينما 🔒</h2>
-
-        {% if not logged_in %}
-        <form method="POST" action="/admin/login">
-            <input type="password" name="password" placeholder="أدخل كلمة المرور المشفرة" required>
-            <button type="submit" style="width:100%;">دخول أمن</button>
-        </form>
-        {% else %}
-
-        <div class="security-badge">
-            <i class="fa-solid fa-database"></i> قاعدة البيانات السحابية نشطة ومحفوظة نهائياً.
-        </div>
-
-        <h3>إضافة مسلسل أو فيلم جديد</h3>
-        <form method="POST" action="/admin/add">
-            <input type="text" name="title" placeholder="عنوان المسلسل أو الفيلم" required>
-            <div class="row">
-                <select name="type">
-                    <option value="فيلم">فيلم</option>
-                    <option value="مسلسل">مسلسل</option>
-                </select>
-                <input type="text" name="year" placeholder="السنة" value="2026">
-                <input type="text" name="rating" placeholder="التقييم (مثال: ⭐ 8.5/10 IMDb)" value="⭐ 8.5/10">
-            </div>
-            <input type="text" name="poster" placeholder="رابط صورة البوستر (URL)" required>
-            
-            <span class="hint">💡 افصل بين سيرفرات المشاهدة بفاصلة ( , )</span>
-            <input type="text" name="embed_urls" placeholder="روابط Embed للمشاهدة" required>
-            
-            <span class="hint">📥 رابط التحميل المباشر (Download link):</span>
-            <input type="text" name="download_url" placeholder="رابط التحميل (مثال: https://playmogo.com/dl/...)">
-
-            <textarea name="description" placeholder="وصف العمل" rows="2"></textarea>
-            <button type="submit" style="width:100%;">إنشاء السلسلة وحفظها دائمة</button>
-        </form>
-
-        <hr style="border-color: #2d3446; margin: 30px 0;">
-
-        <h3>إدارة العروض المتاحة</h3>
-        {% for movie in movies %}
-        <div class="work-box">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h4>{{ movie.title }} <span style="font-size:0.8rem; color:#10b981;">({{ movie.type }}) - {{ movie.rating }}</span></h4>
-                <div style="display:flex; gap:6px;">
-                    <button type="button" class="btn-warning" onclick="toggleEdit('edit-{{ movie.id }}')">تعديل</button>
-                    <form method="POST" action="/admin/delete/{{ movie.id }}" style="margin:0;">
-                        <button type="submit" class="btn-danger" onclick="return confirm('حذف هذا العمل نهائياً؟')">حذف</button>
-                    </form>
-                </div>
-            </div>
-
-            <div id="edit-{{ movie.id }}" class="edit-form">
-                <strong style="color:#f59e0b; font-size:0.85rem;">تعديل البيانات:</strong>
-                <form method="POST" action="/admin/edit/{{ movie.id }}" style="margin-top:8px;">
-                    <input type="text" name="title" value="{{ movie.title }}" required>
-                    <div class="row">
-                        <input type="text" name="year" value="{{ movie.year }}">
-                        <input type="text" name="rating" value="{{ movie.rating }}">
-                        <input type="text" name="poster" value="{{ movie.poster }}" required>
-                    </div>
-                    <textarea name="description" rows="2">{{ movie.description }}</textarea>
-                    <button type="submit" style="background:#f59e0b; color:#000; width:100%;">تحديث</button>
-                </form>
-            </div>
-
-            <div style="margin-top: 15px;">
-                <strong style="font-size: 0.85rem; color: #9ca3af;">الحلقات والعروض المحفوظة:</strong>
-                {% for ep in movie.episodes %}
-                <div class="ep-item">
-                    <span>
-                        <strong>الحلقة {{ ep.ep_number }}</strong> — 
-                        <small style="color: #f59e0b;">سيرفرات: {{ ep.servers | length }}</small>
-                        {% if ep.download_url %}<small style="color:#10b981;"> | يتوفر تحميل ✅</small>{% endif %}
-                    </span>
-                    <form method="POST" action="/admin/delete_ep/{{ ep.id }}" style="margin:0;">
-                        <button type="submit" style="background:#ef4444; color:#fff; padding:3px 8px; font-size:0.75rem;">حذف</button>
-                    </form>
-                </div>
-                {% endfor %}
-            </div>
-
-            {% if movie.type == 'مسلسل' %}
-            <div style="margin-top: 15px; background: #12141c; padding: 10px; border-radius: 6px;">
-                <strong style="color: #10b981; font-size: 0.85rem;">+ إضافة حلقة جديدة:</strong>
-                <form method="POST" action="/admin/add_episode/{{ movie.id }}" style="margin-top: 8px;">
-                    <div class="row">
-                        <input type="number" name="ep_number" placeholder="رقم الحلقة" required style="width: 20%;">
-                        <input type="text" name="embed_urls" placeholder="روابط المشاهدة (مفصولة بفاصلة ,)" required>
-                    </div>
-                    <input type="text" name="download_url" placeholder="رابط التحميل لهذه الحلقة">
-                    <button type="submit" class="btn-add-ep">إضافة الحلقة</button>
-                </form>
-            </div>
-            {% endif %}
-
-        </div>
-        {% endfor %}
-
-        <a href="/admin/logout" class="back-link">تسجيل الخروج الأمن</a>
-        {% endif %}
-        <a href="/" class="back-link">العودة للواجهة الرئيسية</a>
-    </div>
-
-    <script>
-        function toggleEdit(id) {
-            const form = document.getElementById(id);
-            form.style.display = form.style.display === 'block' ? 'none' : 'block';
-        }
-    </script>
-
-</body>
-</html>
-"""
-
-def fetch_all_movies(movie_type=None):
-    try:
-        db = get_db()
-        cursor = db.cursor()
-        if movie_type:
-            cursor.execute("SELECT * FROM movies WHERE type = %s ORDER BY id DESC", (movie_type,))
-        else:
-            cursor.execute("SELECT * FROM movies ORDER BY id DESC")
-        
-        movies_rows = cursor.fetchall()
-        result = []
-        
-        for row in movies_rows:
-            m = dict(row)
-            cursor.execute("SELECT * FROM episodes WHERE movie_id = %s ORDER BY ep_number ASC", (m['id'],))
-            ep_rows = cursor.fetchall()
-            episodes = []
-            for ep in ep_rows:
-                episodes.append({
-                    "id": ep['id'],
-                    "ep_number": ep['ep_number'],
-                    "servers": [s.strip() for s in ep['servers'].split(',') if s.strip()],
-                    "download_url": ep.get('download_url', '')
-                })
-            m['episodes'] = episodes
-            result.append(m)
-        cursor.close()
-        return result
-    except Exception as e:
-        print("Fetch Error:", e)
-        return []
-
-@app.route('/')
-def home():
-    m_type = request.args.get('type')
-    movies = fetch_all_movies(m_type)
-    return render_template_string(HTML_TEMPLATE, movies=movies)
-
-# --- مسار خريطة الموقع (Sitemap.xml) ---
-@app.route('/sitemap.xml', methods=['GET'])
-def sitemap():
-    try:
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute("SELECT id FROM movies ORDER BY id DESC")
-        movies = cursor.fetchall()
-        cursor.close()
-
-        xml = ['<?xml version="1.0" encoding="UTF-8"?>']
-        xml.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
-        
-        # الصفحة الرئيسية
-        xml.append('  <url>')
-        xml.append('    <loc>https://halal-cinema.vercel.app/</loc>')
-        xml.append('    <changefreq>daily</changefreq>')
-        xml.append('    <priority>1.0</priority>')
-        xml.append('  </url>')
-
-        # قسم الأفلام
-        xml.append('  <url>')
-        xml.append('    <loc>https://halal-cinema.vercel.app/?type=%D9%81%D9%8A%D9%84%D9%85</loc>')
-        xml.append('    <changefreq>daily</changefreq>')
-        xml.append('    <priority>0.8</priority>')
-        xml.append('  </url>')
-
-        # قسم المسلسلات
-        xml.append('  <url>')
-        xml.append('    <loc>https://halal-cinema.vercel.app/?type=%D9%85%D8%B3%D9%84%D8%B3%D9%84</loc>')
-        xml.append('    <changefreq>daily</changefreq>')
-        xml.append('    <priority>0.8</priority>')
-        xml.append('  </url>')
-
-        xml.append('</urlset>')
-
-        sitemap_xml = "\n".join(xml)
-        return Response(sitemap_xml, mimetype='text/xml')
-    except Exception as e:
-        return str(e), 500
-
-@app.route('/admin')
-def admin():
-    movies = fetch_all_movies() if session.get('logged_in') else []
-    return render_template_string(ADMIN_TEMPLATE, logged_in=session.get('logged_in'), movies=movies)
-
-@app.route('/admin/login', methods=['POST'])
-def admin_login():
-    if request.form.get('password') == ADMIN_PASSWORD:
-        session['logged_in'] = True
-    return redirect('/admin')
-
-@app.route('/admin/logout')
-def admin_logout():
-    session.pop('logged_in', None)
-    return redirect('/admin')
-
-@app.route('/admin/add', methods=['POST'])
-def admin_add():
-    if session.get('logged_in'):
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute(
-            "INSERT INTO movies (title, type, year, poster, description, rating) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-            (request.form.get('title'), request.form.get('type'), request.form.get('year'), request.form.get('poster'), request.form.get('description'), request.form.get('rating', '⭐ 8.0/10'))
-        )
-        movie_id = cursor.fetchone()['id']
-        urls = request.form.get('embed_urls')
-        dl_url = request.form.get('download_url')
-        cursor.execute(
-            "INSERT INTO episodes (movie_id, ep_number, servers, download_url) VALUES (%s, %s, %s, %s)",
-            (movie_id, 1, urls, dl_url)
-        )
-        db.commit()
-        cursor.close()
-    return redirect('/admin')
-
-@app.route('/admin/edit/<int:movie_id>', methods=['POST'])
-def edit_movie(movie_id):
-    if session.get('logged_in'):
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute(
-            "UPDATE movies SET title = %s, year = %s, poster = %s, description = %s, rating = %s WHERE id = %s",
-            (request.form.get('title'), request.form.get('year'), request.form.get('poster'), request.form.get('description'), request.form.get('rating'), movie_id)
-        )
-        db.commit()
-        cursor.close()
     return redirect('/admin')
 
 @app.route('/admin/delete/<int:movie_id>', methods=['POST'])
-def delete_movie(movie_id):
-    if session.get('logged_in'):
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute("DELETE FROM movies WHERE id = %s", (movie_id,))
-        db.commit()
-        cursor.close()
-    return redirect('/admin')
+def admin_delete(movie_id):
+    if not session.get('admin_logged_in'):
+        return redirect('/admin')
 
-@app.route('/admin/add_episode/<int:movie_id>', methods=['POST'])
-def add_episode(movie_id):
-    if session.get('logged_in'):
-        db = get_db()
-        cursor = db.cursor()
-        ep_num = request.form.get('ep_number')
-        urls = request.form.get('embed_urls')
-        dl_url = request.form.get('download_url')
-        
-        cursor.execute("DELETE FROM episodes WHERE movie_id = %s AND ep_number = %s", (movie_id, ep_num))
-        cursor.execute("INSERT INTO episodes (movie_id, ep_number, servers, download_url) VALUES (%s, %s, %s, %s)", (movie_id, ep_num, urls, dl_url))
-        db.commit()
-        cursor.close()
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM movies WHERE id = %s;", (movie_id,))
+    db.commit()
+    cursor.close()
     return redirect('/admin')
 
 @app.route('/admin/delete_ep/<int:ep_id>', methods=['POST'])
-def delete_ep(ep_id):
-    if session.get('logged_in'):
-        db = get_db()
-        cursor = db.cursor()
-        cursor.execute("DELETE FROM episodes WHERE id = %s", (ep_id,))
-        db.commit()
-        cursor.close()
-    return redirect('/admin')
+def admin_delete_ep(ep_id):
+    if not session.get('admin_logged_in'):
+        return redirect('/admin')
 
-@app.route('/api/like/<int:movie_id>', methods=['POST'])
-def add_like(movie_id):
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("UPDATE movies SET likes_count = likes_count + 1 WHERE id = %s RETURNING likes_count", (movie_id,))
+    cursor.execute("DELETE FROM episodes WHERE id = %s;", (ep_id,))
+    db.commit()
+    cursor.close()
+    return redirect('/admin')
+
+# --- API endpoints للتعليقات والإعجابات ---
+
+@app.route('/api/like/<int:movie_id>', methods=['POST'])
+def api_like(movie_id):
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("UPDATE movies SET likes_count = likes_count + 1 WHERE id = %s RETURNING likes_count;", (movie_id,))
     new_likes = cursor.fetchone()['likes_count']
     db.commit()
     cursor.close()
-    return jsonify({'likes': new_likes})
+    return jsonify({"likes": new_likes})
 
-@app.route('/api/comments/<int:movie_id>', methods=['GET', 'POST'])
-def handle_comments(movie_id):
+@app.route('/api/comments/<int:movie_id>', methods=['GET'])
+def api_get_comments(movie_id):
     db = get_db()
     cursor = db.cursor()
-    if request.method == 'POST':
-        data = request.get_json()
-        cursor.execute(
-            "INSERT INTO comments (movie_id, user_name, comment_text) VALUES (%s, %s, %s)",
-            (movie_id, data.get('user_name'), data.get('comment_text'))
-        )
+    cursor.execute("SELECT user_name, comment_text FROM comments WHERE movie_id = %s ORDER BY id DESC;", (movie_id,))
+    comments = cursor.fetchall()
+    cursor.close()
+    return jsonify(comments)
+
+@app.route('/api/comments/<int:movie_id>', methods=['POST'])
+def api_post_comment(movie_id):
+    data = request.get_json() or {}
+    user_name = data.get('user_name', 'زائر')
+    comment_text = data.get('comment_text', '')
+
+    if comment_text.strip():
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("INSERT INTO comments (movie_id, user_name, comment_text) VALUES (%s, %s, %s);",
+                       (movie_id, user_name, comment_text))
         db.commit()
         cursor.close()
-        return jsonify({'status': 'success'})
-    else:
-        cursor.execute("SELECT user_name, comment_text, created_at FROM comments WHERE movie_id = %s ORDER BY id DESC", (movie_id,))
-        comments = cursor.fetchall()
-        cursor.close()
-        return jsonify(comments)
+
+    return jsonify({"status": "success"})
+
+if __name__ == '__main__':
+    app.run(debug=True)
