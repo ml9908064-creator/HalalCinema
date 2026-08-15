@@ -12,7 +12,11 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 def get_db_connection():
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL environment variable is missing.")
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    
+    # تنظيف الرابط من الأقواس الزائدة إن وجدت لضمان الاتصال بـ psycopg2
+    db_url = DATABASE_URL.replace('[', '').replace(']', '')
+    
+    conn = psycopg2.connect(db_url, cursor_factory=RealDictCursor)
     return conn
 
 def init_db():
